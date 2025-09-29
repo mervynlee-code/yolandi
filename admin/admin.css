@@ -1,93 +1,507 @@
-/* YOLANDI Admin Styles */
+/* ---------- VS Code-like theme ---------- */
 :root {
-  --yolandi-border: #ccd0d4;
-  --yolandi-muted: #6c7781;
-  --yolandi-bg: #fff;
-  --yolandi-bg-alt: #f6f7f7;
+  --vscode-bg: #1e1e1e;
+  --vscode-panel: #252526;
+  --vscode-panel-border: #333;
+  --vscode-sidebar: #252526;
+  --vscode-activity: #333333;
+  --vscode-text: #cccccc;
+  --vscode-text-dim: #9b9b9b;
+  --vscode-accent: #007acc;
+  --vscode-hover: #2a2a2a;
+  --vscode-tab: #2d2d2d;
+  --vscode-tab-active: #1e1e1e;
+  --vscode-status: #007acc;
 }
 
-#yolandi-root {
-  padding: 12px;
+/* Reset WP chrome in our area */
+#ystudio * {
+  box-sizing: border-box;
 }
 
-h1,
-h2,
-h3 {
-  margin: 0.5em 0;
+#ystudio {
+  position: relative;
+  background: var(--vscode-bg);
+  color: var(--vscode-text);
+  height: calc(100vh - 32px);
+  /* under the WP admin bar */
+  display: grid;
+  grid-template-rows: 36px 1fr 22px;
+  /* menubar, main, status */
+  font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
-/* Cards */
-.y-card {
-  background: var(--yolandi-bg);
-  border: 1px solid var(--yolandi-border);
-  border-radius: 6px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  padding: 12px;
+#wpcontent,
+#wpfooter {
+  margin-left: 0 !important;
 }
 
-/* Tables */
-.widefat.fixed.striped {
-  border: 1px solid var(--yolandi-border);
-  border-collapse: collapse;
-  width: 100%;
-  background: var(--yolandi-bg);
+/* Menubar */
+#ystudio-menubar {
+  background: var(--vscode-panel);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
 }
 
-.widefat.fixed.striped th,
-.widefat.fixed.striped td {
-  border-top: 1px solid var(--yolandi-border);
-  padding: 8px 10px;
-  vertical-align: top;
+#ystudio-menubar .title {
+  margin-right: 12px;
+  color: var(--vscode-text-dim);
 }
 
-.widefat.fixed.striped thead th {
-  background: var(--yolandi-bg-alt);
-  font-weight: 600;
+#ystudio-menubar .left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.widefat.fixed.striped tbody tr:nth-child(odd) {
-  background: #fcfcfc;
+#ystudio-menubar .right {
+  display: flex;
+  gap: 10px;
+  color: var(--vscode-text-dim);
 }
 
-/* Code blocks */
-pre {
-  background: var(--yolandi-bg-alt);
-  padding: 8px;
-  border: 1px solid var(--yolandi-border);
-  border-radius: 4px;
-  overflow: auto;
-}
-
-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
-/* Editor container (Monaco fallback) */
-.monaco-editor,
-.monaco-editor-background {
-  background: #fff !important;
-}
-
-/* Inputs */
-input[type="text"],
-input[type="number"],
-textarea {
-  border: 1px solid var(--yolandi-border);
+#ystudio-menubar .menu>button {
+  background: transparent;
+  border: 0;
+  color: var(--vscode-text);
+  padding: 4px 8px;
   border-radius: 3px;
-  padding: 6px 8px;
+  cursor: default;
 }
 
-label {
-  color: var(--yolandi-muted);
+#ystudio-menubar .menu>button:hover {
+  background: var(--vscode-hover);
 }
 
-/* Buttons (WP already provides .button/.button-primary; these are minimal tweaks) */
-.button {
+#ystudio-menubar .menu .menu-popover {
+  position: absolute;
+  margin-top: 2px;
+  background: var(--vscode-panel);
+  border: 1px solid var(--vscode-panel-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+  min-width: 220px;
+  z-index: 10;
+}
+
+#ystudio-menubar .menu .menu-item {
+  padding: 6px 10px;
+  cursor: default;
+}
+
+#ystudio-menubar .menu .menu-item:hover {
+  background: var(--vscode-hover);
+}
+
+/* Main split: activity bar / sidebar / editor */
+#ystudio-main {
+  display: grid;
+  grid-template-columns: 48px auto 1fr;
+  /* activity, sidebar, editor */
+  min-height: 0;
+  /* allow children to shrink */
+}
+
+/* Activity bar */
+#ystudio-activity {
+  background: var(--vscode-activity);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+#ystudio-activity .activity-btn {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--vscode-text-dim);
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
   cursor: pointer;
 }
 
-.button-primary {
-  box-shadow: none;
+#ystudio-activity .activity-btn:hover {
+  background: var(--vscode-hover);
+  color: var(--vscode-text);
+}
+
+#ystudio-activity .activity-btn.active {
+  color: white;
+  background: #0e639c;
+}
+
+/* Sidebar / Node palette */
+#ystudio-sidebar {
+  width: 280px;
+  background: var(--vscode-sidebar);
+  border-right: 1px solid var(--vscode-panel-border);
+  display: grid;
+  grid-template-rows: 36px 1fr;
+  overflow: hidden;
+}
+
+#ystudio.no-palette #ystudio-sidebar {
+  display: none;
+}
+
+#ystudio-sidebar .sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+#ystudio-sidebar .sidebar-header .icon-btn {
+  background: transparent;
+  border: 0;
+  color: var(--vscode-text-dim);
+}
+
+#ystudio-sidebar .palette-scroll {
+  overflow: auto;
+  padding: 6px;
+}
+
+/* Node tree */
+.node-tree .folder {
+  margin-bottom: 6px;
+}
+
+.node-tree .folder-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: var(--vscode-text);
+}
+
+.node-tree .folder-head:hover {
+  background: var(--vscode-hover);
+}
+
+.node-tree .folder-body {
+  padding-left: 18px;
+}
+
+.node-tree .node-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: grab;
+}
+
+.node-tree .node-item:hover {
+  background: var(--vscode-hover);
+}
+
+/* Editor group */
+#ystudio-editor {
+  display: grid;
+  grid-template-rows: 32px 1fr auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+#ystudio-editor .tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--vscode-panel);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  padding: 2px 4px;
+}
+
+#ystudio-editor .tabs .tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--vscode-tab);
+  color: var(--vscode-text);
+  border: 1px solid var(--vscode-panel-border);
+  border-bottom: 0;
+  padding: 4px 8px;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  cursor: default;
+}
+
+#ystudio-editor .tabs .tab.active {
+  background: var(--vscode-tab-active);
+}
+
+#ystudio-editor .tabs .tab .close {
+  border: 0;
+  background: transparent;
+  color: var(--vscode-text-dim);
+}
+
+#ystudio-editor .tabs .tab.add {
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  color: var(--vscode-text-dim);
+}
+
+#ystudio-editor-host {
+  position: relative;
+  background: #1b1b1b;
+  min-height: 0;
+  height: 100%;
+}
+
+#ystudio-editor-host .hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--vscode-text-dim);
+}
+
+/* Bottom panel / terminal */
+#ystudio-panel {
+  --panel-height: 220px;
+  background: var(--vscode-panel);
+  border-top: 1px solid var(--vscode-panel-border);
+  height: var(--panel-height);
+  min-height: 120px;
+  position: relative;
+  display: grid;
+  grid-template-rows: 28px 1fr;
+}
+
+#ystudio-panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+#ystudio-panel-tabs .tab {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+#ystudio-panel-tabs .spacer {
+  flex: 1;
+}
+
+#ystudio-panel-tabs .controls button {
+  background: transparent;
+  border: 0;
+  color: var(--vscode-text-dim);
+  margin-left: 6px;
+}
+
+#ystudio-terminal {
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+#ystudio-terminal pre {
+  margin: 0;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+}
+
+/* Drag handle */
+#ystudio-panel-drag {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+#ystudio-panel-drag.dragging {
+  background: rgba(255, 255, 255, .08);
+}
+
+/* Status bar */
+#ystudio-statusbar {
+  background: var(--vscode-status);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+}
+
+#ystudio-statusbar .left,
+#ystudio-statusbar .right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#ystudio-statusbar .sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, .35);
+  display: inline-block;
+}
+
+/* Sidebar open/close state without jQuery */
+#ystudio {
+  --sidebar-width: 280px;
+}
+
+#ystudio-main {
+  display: grid;
+  grid-template-columns: 48px var(--sidebar-width) 1fr;
+  min-height: 0;
+  transition: grid-template-columns 180ms ease;
+}
+
+#ystudio[data-palette="closed"] #ystudio-main {
+  grid-template-columns: 48px 0 1fr;
+}
+
+#ystudio-sidebar {
+  overflow: hidden;
+  transition: opacity 180ms ease;
+}
+
+#ystudio[data-palette="closed"] #ystudio-sidebar {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Make sure the editor host actually fills */
+#ystudio-editor-host {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Smooth sidebar toggle (no jQuery) */
+#ystudio { --sidebar-width: 280px; }
+#ystudio-main { display:grid; grid-template-columns:48px var(--sidebar-width) 1fr; transition:grid-template-columns .18s ease; }
+#ystudio[data-palette="closed"] #ystudio-main { grid-template-columns:48px 0 1fr; }
+#ystudio-sidebar { overflow:hidden; transition:opacity .18s ease; }
+#ystudio[data-palette="closed"] #ystudio-sidebar { opacity:0; pointer-events:none; }
+
+/* Editor host */
+#ystudio-editor-host { position:relative; height:100%; min-height:0; }
+
+/* DOM fallback “chips” so drops are visible even without Baklava renderer */
+#ystudio-editor-host.dom-fallback { background: #141414; }
+#ystudio-editor-host .dom-chip {
+  position:absolute; padding:6px 8px; border-radius:8px;
+  background:#2b2b2b; color:#eee; border:1px solid #3a3a3a;
+  font-size:12px; display:inline-flex; gap:6px; align-items:center;
+  box-shadow:0 2px 6px rgba(0,0,0,.35); user-select:none; cursor:move;
+}
+#ystudio-editor-host .dom-chip i { opacity:.8; }
+
+/* VS Code shell scaffolding (if not already present) */
+#ystudio { --sidebar-width: 280px; --panel-height: 220px; }
+#ystudio-main { display:grid; grid-template-columns:48px var(--sidebar-width) 1fr; transition:grid-template-columns .18s ease; }
+#ystudio[data-palette="closed"] #ystudio-main { grid-template-columns:48px 0 1fr; }
+#ystudio-sidebar { overflow:hidden; transition:opacity .18s ease; }
+#ystudio[data-palette="closed"] #ystudio-sidebar { opacity:0; pointer-events:none; }
+#ystudio-editor-host { position:relative; height:100%; min-height:0; background:#151515; }
+
+/* Canvas */
+#yc-canvas { position:absolute; inset:0; overflow:hidden; }
+#yc-canvas .yc-wires { position:absolute; inset:0; pointer-events:none; }
+#yc-canvas .yc-wire { fill:none; stroke:#3b82f6; stroke-width:2; opacity:.9; }
+#yc-canvas .yc-wire.wip { stroke-dasharray:6 6; opacity:.6; }
+
+/* Node card */
+.yc-node {
+  position:absolute; background:#222; color:#ddd; border:1px solid #343434; border-radius:10px;
+  box-shadow:0 3px 12px rgba(0,0,0,.35); user-select:none;
+}
+.yc-head {
+  height:28px; display:flex; align-items:center; gap:8px; padding:0 10px;
+  background:#2a2a2a; border-bottom:1px solid #343434; border-top-left-radius:10px; border-top-right-radius:10px;
+  cursor:grab; font-size:12px; color:#ccc;
+}
+.yc-head:active { cursor:grabbing; }
+.yc-ports { display:grid; grid-template-columns:1fr 1fr; padding:6px 8px; gap:4px; }
+.yc-ports .col.in { justify-self:start; }
+.yc-ports .col.out { justify-self:end; }
+.yc-port { display:flex; align-items:center; gap:6px; height:22px; font-size:12px; }
+.yc-port .name { color:#bbb; }
+.yc-port .dot {
+  width:12px; height:12px; border-radius:50%;
+  border:2px solid #3b82f6; background:#0b0b0b;
+  box-shadow:0 0 0 2px #0b0b0b inset;
+}
+.yc-port.in { padding-left:2px; }
+.yc-port.out { padding-right:2px; }
+.yc-port.out .name { order:1; } .yc-port.out .dot { order:2; }
+
+/* Compact body fields */
+.yc-body { padding:8px; border-top:1px solid #343434; }
+.yc-body .row { display:grid; grid-template-columns:96px 1fr; align-items:center; gap:8px; margin:4px 0; }
+.yc-body .row.check { grid-template-columns:auto 1fr; }
+.yc-body .lab { color:#9aa0a6; font-size:11px; }
+.yc-body input[type="text"], .yc-body input[type="number"], .yc-body select {
+  background:#151515; color:#eaeaea; border:1px solid #3a3a3a; border-radius:6px; height:24px; padding:0 6px; font-size:12px;
+}
+.yc-body input[type="checkbox"] { transform: translateY(1px); }
+
+/* Activity bar, side palette, tabs, terminal, status… (minimal if you already have) */
+#ystudio-activity { background:#333; display:flex; flex-direction:column; align-items:center; gap:8px; padding:8px 0; border-right:1px solid #2b2b2b; }
+#ystudio-activity .activity-btn { width:36px; height:36px; color:#a0a0a0; background:transparent; border:0; border-radius:6px; }
+#ystudio-activity .activity-btn.active { background:#0e639c; color:#fff; }
+
+#ystudio-sidebar { background:#252526; border-right:1px solid #2b2b2b; display:grid; grid-template-rows:36px 1fr; }
+#ystudio-sidebar .sidebar-header { display:flex; align-items:center; justify-content:space-between; padding:0 10px; border-bottom:1px solid #2b2b2b; color:#c0c0c0; }
+#ystudio-sidebar .palette-scroll { overflow:auto; padding:6px; }
+.node-tree .folder-head { padding:4px 6px; cursor:pointer; color:#ccc; }
+.node-tree .folder-body { padding-left:16px; }
+.node-tree .node-item { display:flex; align-items:center; gap:6px; padding:3px 6px; border-radius:6px; color:#ddd; cursor:grab; }
+.node-tree .node-item:hover { background:#2d2d2d; }
+
+#ystudio-editor { display:grid; grid-template-rows:32px 1fr auto; }
+#ystudio-editor .tabs { display:flex; align-items:center; gap:2px; background:#252526; border-bottom:1px solid #2b2b2b; padding:2px 4px; }
+#ystudio-editor .tabs .tab { display:flex; align-items:center; gap:8px; background:#2d2d2d; border:1px solid #2b2b2b; border-bottom:0; padding:4px 8px; border-top-left-radius:6px; border-top-right-radius:6px; color:#d0d0d0; }
+#ystudio-editor .tabs .tab.active { background:#1e1e1e; }
+#ystudio-editor .tabs .tab.add { background:transparent; border:0; color:#9aa0a6; }
+
+#ystudio-panel { background:#252526; border-top:1px solid #2b2b2b; height:var(--panel-height); min-height:120px; position:relative; display:grid; grid-template-rows:28px 1fr; }
+#ystudio-panel-tabs { display:flex; align-items:center; gap:10px; padding:0 8px; border-bottom:1px solid #2b2b2b; color:#c0c0c0; }
+#ystudio-terminal { overflow:auto; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+#ystudio-terminal pre { margin:0; padding:8px 10px; white-space:pre-wrap; color:#dcdcdc; }
+#ystudio-panel-drag { position:absolute; top:-3px; left:0; right:0; height:6px; cursor:ns-resize; }
+
+#ystudio-statusbar { background:#007acc; color:#fff; display:flex; align-items:center; justify-content:space-between; padding:0 10px; }
+#ystudio-statusbar .sep { width:1px; height:14px; background:rgba(255,255,255,.35); display:inline-block; }
+
+
+/* Remove Sidebar & Fullscreen GUI */
+
+#adminmenumain,
+#adminmenuback,
+#adminmenuwrap,
+#adminmenu,
+#collapse-menu {
+  display: none !important;
+}
+
+#wpcontent,
+#wpfooter {
+  margin-left: 0 !important;
+}
+
+body.wp-admin {
+  min-width: 0 !important;
 }
 
 .baklava-node-palette h1 {
@@ -104,6 +518,16 @@ label {
   padding: 1px !important;
 }
 
-#wpcontent, #yolandi-root, #yolandi-root > div {
+#wpcontent,
+#yolandi-root,
+#yolandi-root>div {
   padding: 0 !important;
+}
+
+#yolandi-root>div>h1 {
+  display: none !important;
+}
+
+#yolandi-root>div>div:nth-child(3)>div>div {
+  border: 0 !important;
 }

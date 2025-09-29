@@ -38,15 +38,6 @@ if (!class_exists('YOLANDI_Admin_Page')) {
                 'dashicons-media-code',
                 59
             );
-
-            /* Removes Admin Sidebar */
-            add_action("admin_head-{$hook}", function () {
-                echo '<style>
-            #adminmenumain, #adminmenuback, #adminmenuwrap, #adminmenu, #collapse-menu { display:none !important; }
-            #wpcontent, #wpfooter { margin-left: 0 !important; }
-            body.wp-admin { min-width: 0 !important; }
-        </style>';
-            });
         }
 
         /** Echo the SPA mount point. */
