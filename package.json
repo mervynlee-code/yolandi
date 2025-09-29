@@ -21,10 +21,22 @@
     "lib": "lib"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
+    "@baklavajs/renderer-vue": "^2.7.0",
     "@sparticuz/chromium": "^138.0.2",
-    "puppeteer-core": "^24.18.0"
+    "@vitejs/plugin-react": "^5.0.4",
+    "baklavajs": "^2.7.0",
+    "puppeteer-core": "^24.18.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "vite": "^7.1.7",
+    "vue": "^3.5.22"
+  },
+  "devDependencies": {
+    "vite-plugin-monaco-editor": "^1.1.0"
   }
 }

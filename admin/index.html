@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>YOLANDI Admin</title>
+    <!-- In WordPress, CSS/JS are enqueued by class-admin-page.php. This file is for local dev or static preview. -->
+    <link rel="stylesheet" href="./admin.css" />
+    <script>
+      // Fallback config for local preview (ignored in WP Admin where it's injected via wp_add_inline_script)
+      window.YOLANDI_CONFIG = window.YOLANDI_CONFIG || {
+        version: 'dev',
+        restRoot: (location.origin + '/wp-json/yolandi/v1').replace(/\/$/, ''),
+        wpRestNonce: '',
+        caps: { manage_scripts: true, manage_jobs: true, run_jobs: true },
+      };
+    </script>
+  </head>
+  <body>
+    <div id="yolandi-root">
+      <noscript>This page requires JavaScript.</noscript>
+    </div>
+    <script type="module" src="./main.jsx"></script>
+  </body>
+</html>
