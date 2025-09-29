@@ -93,15 +93,16 @@ function NodeCanvas({ registerApi }) {
   const wrapRef = useRef(null);
   const contentRef = useRef(null);
 
-  const [nodes, setNodes] = useState([]);  // {id,x,y,w,title,meta,fields,inputs[],outputs[],selected}
-  const [links, setLinks] = useState([]);  // {id, from:{nid,pid}, to:{nid,pid}}
+  const [nodes, setNodes] = useState([]); // {id,x,y,w,title,meta,fields,inputs[],outputs[],selected}
+  const [links, setLinks] = useState([]); // {id, from:{nid,pid}, to:{nid,pid}}
   const [view, setView] = useState({ x: 0, y: 0, k: 1 }); // pan/zoom
   const [mode, setMode] = useState("select"); // "select" | "pan"
-  const [drag, setDrag] = useState(null);     // node drag: {ids[], offsets:[{id,dx,dy}]}
-  const [wip, setWip] = useState(null);       // wire drag: {from:{nid,pid}, x,y} (screen)
-  const [marq, setMarq] = useState(null);     // marquee: {sx,sy,ex,ey, sxScr, syScr, exScr, eyScr}
+  const [drag, setDrag] = useState(null); // node drag: {ids[], offsets:[{id,dx,dy}]}
+  const [wip, setWip] = useState(null); // wire drag: {from:{nid,pid}, x,y} (screen)
+  const [marq, setMarq] = useState(null); // marquee: {sx,sy,ex,ey, sxScr, syScr, exScr, eyScr}
 
-  const kMin = 0.3, kMax = 2.0;
+  const kMin = 0.3,
+    kMax = 2.0;
 
   /* ----- coordinate helpers ----- */
   const toWorld = (clientX, clientY) => {
@@ -169,9 +170,12 @@ function NodeCanvas({ registerApi }) {
             id: n.id,
             title: n.title,
             type: n.meta?.type || null,
-            x: n.x, y: n.y, w: n.w,
+            x: n.x,
+            y: n.y,
+            w: n.w,
             fields: n.fields,
-            inputs: n.inputs, outputs: n.outputs,
+            inputs: n.inputs,
+            outputs: n.outputs,
           })),
           links,
         };
@@ -181,9 +185,12 @@ function NodeCanvas({ registerApi }) {
         setView(doc.view || { x: 0, y: 0, k: 1 });
         setNodes(
           doc.nodes.map((n) => ({
-            id: n.id, title: n.title || "Node",
+            id: n.id,
+            title: n.title || "Node",
             meta: { type: n.type || "Imported" },
-            x: n.x, y: n.y, w: n.w || NODE_W,
+            x: n.x,
+            y: n.y,
+            w: n.w || NODE_W,
             fields: n.fields || {},
             inputs: n.inputs || [{ id: "i0", name: "in" }],
             outputs: n.outputs || [{ id: "o0", name: "out" }],
@@ -193,10 +200,18 @@ function NodeCanvas({ registerApi }) {
         setLinks(Array.isArray(doc.links) ? doc.links : []);
       },
       setMode,
-      zoomIn() { zoomAt(1.1); },
-      zoomOut() { zoomAt(1 / 1.1); },
-      zoomFit() { fitToContent(); },
-      center() { setView((v) => ({ ...v, x: 0, y: 0 })); },
+      zoomIn() {
+        zoomAt(1.1);
+      },
+      zoomOut() {
+        zoomAt(1 / 1.1);
+      },
+      zoomFit() {
+        fitToContent();
+      },
+      center() {
+        setView((v) => ({ ...v, x: 0, y: 0 }));
+      },
       _debug: { nodes, links },
     };
     registerApi?.(api);
@@ -243,8 +258,12 @@ function NodeCanvas({ registerApi }) {
     }
     if (mode === "pan" || e.button === 1) {
       const start = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y };
-      const move = (ev) => setView({ x: start.vx + (ev.clientX - start.sx), y: start.vy + (ev.clientY - start.sy), k: view.k });
-      const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+      const move = (ev) =>
+        setView({ x: start.vx + (ev.clientX - start.sx), y: start.vy + (ev.clientY - start.sy), k: view.k });
+      const up = () => {
+        window.removeEventListener("mousemove", move);
+        window.removeEventListener("mouseup", up);
+      };
       window.addEventListener("mousemove", move);
       window.addEventListener("mouseup", up);
       return;
@@ -252,7 +271,16 @@ function NodeCanvas({ registerApi }) {
 
     // --- marquee selection with live preview (no stale state) ---
     const startW = toWorld(e.clientX, e.clientY);
-    let box = { sx: startW.x, sy: startW.y, ex: startW.x, ey: startW.y, sxScr: e.clientX, syScr: e.clientY, exScr: e.clientX, eyScr: e.clientY };
+    let box = {
+      sx: startW.x,
+      sy: startW.y,
+      ex: startW.x,
+      ey: startW.y,
+      sxScr: e.clientX,
+      syScr: e.clientY,
+      exScr: e.clientX,
+      eyScr: e.clientY,
+    };
     setMarq(box);
 
     const move = (ev) => {
@@ -261,12 +289,22 @@ function NodeCanvas({ registerApi }) {
       setMarq(box); // draw rectangle
 
       // live highlight
-      const x1 = Math.min(box.sx, box.ex), y1 = Math.min(box.sy, box.ey);
-      const x2 = Math.max(box.sx, box.ex), y2 = Math.max(box.sy, box.ey);
+      const x1 = Math.min(box.sx, box.ex),
+        y1 = Math.min(box.sy, box.ey);
+      const x2 = Math.max(box.sx, box.ex),
+        y2 = Math.max(box.sy, box.ey);
       setNodes((N) =>
         N.map((n) => {
-          const H = HEAD_H + 8 + Math.max(n.inputs.length, n.outputs.length) * ROW_H + 12 + Object.keys(n.fields).length * (ROW_H + 4);
-          const nx1 = n.x, ny1 = n.y, nx2 = n.x + n.w, ny2 = n.y + H;
+          const H =
+            HEAD_H +
+            8 +
+            Math.max(n.inputs.length, n.outputs.length) * ROW_H +
+            12 +
+            Object.keys(n.fields).length * (ROW_H + 4);
+          const nx1 = n.x,
+            ny1 = n.y,
+            nx2 = n.x + n.w,
+            ny2 = n.y + H;
           const hit = !(nx2 < x1 || nx1 > x2 || ny2 < y1 || ny1 > y2);
           return { ...n, selected: hit };
         })
@@ -296,7 +334,8 @@ function NodeCanvas({ registerApi }) {
     startDragFromNode(e, nid);
   }
   function startDragFromNode(e, nid) {
-    const n = nodeById(nid); if (!n) return;
+    const n = nodeById(nid);
+    if (!n) return;
     const ids = nodes.filter((x) => x.selected).map((x) => x.id);
     const moving = ids.length ? ids : [nid];
     const startWorld = toWorld(e.clientX, e.clientY);
@@ -340,14 +379,20 @@ function NodeCanvas({ registerApi }) {
   }
   function nearestInputPortWorld(xw, yw) {
     const ports = Array.from(document.querySelectorAll(".yc-port.in"));
-    let best = null, bestD2 = 16 * 16;
+    let best = null,
+      bestD2 = 16 * 16;
     for (const el of ports) {
       const k = el.getAttribute("data-port-key");
       const [, nid, pid] = k.split(":");
       const c = getPortCenterWorld("in", nid, pid);
       if (!c) continue;
-      const dx = c.x - xw, dy = c.y - yw, d2 = dx * dx + dy * dy;
-      if (d2 < bestD2) { bestD2 = d2; best = { nid, pid }; }
+      const dx = c.x - xw,
+        dy = c.y - yw,
+        d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = { nid, pid };
+      }
     }
     return best;
   }
@@ -356,16 +401,24 @@ function NodeCanvas({ registerApi }) {
     if (!toNid || !inPid) {
       const p2 = toWorld(ev.clientX, ev.clientY);
       const near = nearestInputPortWorld(p2.x, p2.y);
-      if (near) { toNid = near.nid; inPid = near.pid; }
+      if (near) {
+        toNid = near.nid;
+        inPid = near.pid;
+      }
     }
-    if (!toNid || !inPid) { setWip(null); return; }
+    if (!toNid || !inPid) {
+      setWip(null);
+      return;
+    }
     const id = "l" + uid();
     const link = { id, from: wip.from, to: { nid: toNid, pid: inPid } };
     setLinks((L) => [...L.filter((x) => !(x.to.nid === toNid && x.to.pid === inPid)), link]);
     setWip(null);
     ev.stopPropagation();
   }
-  function endWire() { if (wip) setWip(null); }
+  function endWire() {
+    if (wip) setWip(null);
+  }
 
   /* ----- wire paths (world coords; drawn inside transformed layer) ----- */
   const wirePaths = useMemo(() => {
@@ -375,14 +428,20 @@ function NodeCanvas({ registerApi }) {
       const p2 = getPortCenterWorld("in", L.to.nid, L.to.pid);
       if (!p1 || !p2) continue;
       const dx = Math.max(40, Math.abs(p2.x - p1.x) * 0.6);
-      paths.push({ id: L.id, d: `M ${p1.x},${p1.y} C ${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}` });
+      paths.push({
+        id: L.id,
+        d: `M ${p1.x},${p1.y} C ${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`,
+      });
     }
     if (wip) {
       const p1 = getPortCenterWorld("out", wip.from.nid, wip.from.pid);
       const p2 = toWorld(wip.x, wip.y);
       if (p1 && p2) {
         const dx = Math.max(40, Math.abs(p2.x - p1.x) * 0.6);
-        paths.push({ id: "_wip", d: `M ${p1.x},${p1.y} C ${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}` });
+        paths.push({
+          id: "_wip",
+          d: `M ${p1.x},${p1.y} C ${p1.x + dx},${p1.y} ${p2.x - dx},${p2.y} ${p2.x},${p2.y}`,
+        });
       }
     }
     return paths;
@@ -390,13 +449,26 @@ function NodeCanvas({ registerApi }) {
 
   /* ----- fit to content ----- */
   function fitToContent() {
-    if (!nodes.length) { setView({ x: 0, y: 0, k: 1 }); return; }
+    if (!nodes.length) {
+      setView({ x: 0, y: 0, k: 1 });
+      return;
+    }
     const pad = 60;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
     for (const n of nodes) {
-      const H = HEAD_H + 8 + Math.max(n.inputs.length, n.outputs.length) * ROW_H + 12 + Object.keys(n.fields).length * (ROW_H + 4);
-      minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x + n.w);
-      minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y + H);
+      const H =
+        HEAD_H +
+        8 +
+        Math.max(n.inputs.length, n.outputs.length) * ROW_H +
+        12 +
+        Object.keys(n.fields).length * (ROW_H + 4);
+      minX = Math.min(minX, n.x);
+      maxX = Math.max(maxX, n.x + n.w);
+      minY = Math.min(minY, n.y);
+      maxY = Math.max(maxY, n.y + H);
     }
     const rect = wrapRef.current.getBoundingClientRect();
     const w = rect.width - pad * 2;
@@ -432,18 +504,32 @@ function NodeCanvas({ registerApi }) {
         const dt = e.dataTransfer?.getData("application/x-yolandi-node");
         if (!dt) return;
         e.preventDefault();
+        e.stopPropagation();
         const meta = JSON.parse(dt);
         window.YOLANDI.actions.onNodeDrop?.(meta, { x: e.clientX, y: e.clientY });
       }}
     >
       {/* toolbar (top-right) */}
-      <div className="yc-toolbar" style={{ position: "absolute", right: 12, top: 8, zIndex: 20, display: "flex", gap: 6, alignItems: "center" }}>
-        <button title={mode === "pan" ? "Pan (active)" : "Pan"} className={mode === "pan" ? "active" : ""} onClick={toggleMode}><i className="fa fa-hand"></i></button>
-        <button title="Select" className={mode === "select" ? "active" : ""} onClick={() => setMode("select")}><i className="fa fa-square-dashed"></i></button>
+      <div
+        className="yc-toolbar"
+        style={{ position: "absolute", right: 12, top: 8, zIndex: 20, display: "flex", gap: 6, alignItems: "center" }}
+      >
+        <button title={mode === "pan" ? "Pan (active)" : "Pan"} className={mode === "pan" ? "active" : ""} onClick={toggleMode}>
+          <i className="fa fa-hand"></i>
+        </button>
+        <button title="Select" className={mode === "select" ? "active" : ""} onClick={() => setMode("select")}>
+          <i className="fa fa-square-dashed"></i>
+        </button>
         <span className="sep" />
-        <button title="Zoom Out" onClick={zoomOut}><i className="fa fa-magnifying-glass-minus"></i></button>
-        <button title="Fit" onClick={zoomFit}><i className="fa fa-rectangle-list"></i></button>
-        <button title="Zoom In" onClick={zoomIn}><i className="fa fa-magnifying-glass-plus"></i></button>
+        <button title="Zoom Out" onClick={zoomOut}>
+          <i className="fa fa-magnifying-glass-minus"></i>
+        </button>
+        <button title="Fit" onClick={zoomFit}>
+          <i className="fa fa-rectangle-list"></i>
+        </button>
+        <button title="Zoom In" onClick={zoomIn}>
+          <i className="fa fa-magnifying-glass-plus"></i>
+        </button>
         <span className="zoom"> {(view.k * 100) | 0}%</span>
       </div>
 
@@ -451,7 +537,15 @@ function NodeCanvas({ registerApi }) {
       <div
         ref={contentRef}
         className="yc-content"
-        style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", transformOrigin: "0 0", transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: "100%",
+          height: "100%",
+          transformOrigin: "0 0",
+          transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`,
+        }}
       >
         {/* wires */}
         <svg
@@ -482,7 +576,8 @@ function NodeCanvas({ registerApi }) {
             onMouseDown={(e) => onNodeDown(e, n.id)}
           >
             <div className="yc-head" onMouseDown={(e) => onHeadDown(e, n.id)} title={n.title}>
-              <i className="fa fa-grip-lines" /><span>{n.title}</span>
+              <i className="fa fa-grip-lines" />
+              <span>{n.title}</span>
             </div>
 
             <div className="yc-ports">
@@ -494,7 +589,8 @@ function NodeCanvas({ registerApi }) {
                     data-port-key={`in:${n.id}:${p.id}`}
                     onMouseUp={(e) => acceptWire(n.id, p.id, e)}
                   >
-                    <span className="dot" /><span className="name">{p.name}</span>
+                    <span className="dot" />
+                    <span className="name">{p.name}</span>
                   </div>
                 ))}
               </div>
@@ -506,7 +602,8 @@ function NodeCanvas({ registerApi }) {
                     data-port-key={`out:${n.id}:${p.id}`}
                     onMouseDown={(e) => startWire(n.id, p.id, e)}
                   >
-                    <span className="name">{p.name}</span><span className="dot" />
+                    <span className="name">{p.name}</span>
+                    <span className="dot" />
                   </div>
                 ))}
               </div>
@@ -516,17 +613,48 @@ function NodeCanvas({ registerApi }) {
               {Object.entries(n.fields).map(([key, val]) => {
                 const spec = n.meta?.props?.[key] || { type: "string" };
                 const t = (spec.type || "string").toLowerCase();
-                const onChange = (v) => setNodes((N) => N.map((x) => (x.id === n.id ? { ...x, fields: { ...x.fields, [key]: v } } : x)));
+                const onChange = (v) =>
+                  setNodes((N) => (N.map((x) => (x.id === n.id ? { ...x, fields: { ...x.fields, [key]: v } } : x))));
                 if (t === "number") {
-                  return <label key={key} className="row"><span className="lab">{key}</span><input type="number" value={val ?? ""} onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))} /></label>;
+                  return (
+                    <label key={key} className="row">
+                      <span className="lab">{key}</span>
+                      <input
+                        type="number"
+                        value={val ?? ""}
+                        onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
+                      />
+                    </label>
+                  );
                 }
                 if (t === "checkbox" || t === "bool" || t === "boolean") {
-                  return <label key={key} className="row check"><input type="checkbox" checked={!!val} onChange={(e) => onChange(e.target.checked)} /><span className="lab">{key}</span></label>;
+                  return (
+                    <label key={key} className="row check">
+                      <input type="checkbox" checked={!!val} onChange={(e) => onChange(e.target.checked)} />
+                      <span className="lab">{key}</span>
+                    </label>
+                  );
                 }
                 if (t === "select") {
-                  return <label key={key} className="row"><span className="lab">{key}</span><select value={val ?? ""} onChange={(e) => onChange(e.target.value)}>{(spec.options || []).map((opt) => <option key={String(opt)} value={opt}>{String(opt)}</option>)}</select></label>;
+                  return (
+                    <label key={key} className="row">
+                      <span className="lab">{key}</span>
+                      <select value={val ?? ""} onChange={(e) => onChange(e.target.value)}>
+                        {(spec.options || []).map((opt) => (
+                          <option key={String(opt)} value={opt}>
+                            {String(opt)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  );
                 }
-                return <label key={key} className="row"><span className="lab">{key}</span><input type="text" value={val ?? ""} onChange={(e) => onChange(e.target.value)} /></label>;
+                return (
+                  <label key={key} className="row">
+                    <span className="lab">{key}</span>
+                    <input type="text" value={val ?? ""} onChange={(e) => onChange(e.target.value)} />
+                  </label>
+                );
               })}
             </div>
           </div>
@@ -584,7 +712,9 @@ export default function GraphTab() {
   const canvasApiRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  useEffect(() => { ensureFA(); }, []);
+  useEffect(() => {
+    ensureFA();
+  }, []);
   useEffect(() => {
     (async () => {
       try {
@@ -623,9 +753,11 @@ export default function GraphTab() {
     const bar = panelDragRef.current;
     const panel = panelRef.current;
     if (!bar || !panel) return;
-    let startY = 0, startH = 0;
+    let startY = 0,
+      startH = 0;
     const down = (e) => {
-      startY = e.clientY; startH = panel.getBoundingClientRect().height;
+      startY = e.clientY;
+      startH = panel.getBoundingClientRect().height;
       document.addEventListener("mousemove", move);
       document.addEventListener("mouseup", up);
     };
@@ -702,7 +834,11 @@ export default function GraphTab() {
 
   /* ----- actions exposed ----- */
   window.YOLANDI.actions.onNodeDrop = (meta, pos) => {
-    if (auth.locked) { setShowAuth(true); setPanelTab("console"); return; }
+    if (auth.locked) {
+      setShowAuth(true);
+      setPanelTab("console");
+      return;
+    }
     canvasApiRef.current?.addNodeByMeta(meta, pos);
   };
   window.YOLANDI.actions.newWorkflow = () => openNewTab();
@@ -714,28 +850,38 @@ export default function GraphTab() {
     window.YOLANDI.actions.installPurchased = async (item) => {
       try {
         const t = localStorage.getItem("yolandi_token");
-        if (!t) { alert("Please login first."); return; }
-        const d = await fetch(`https://yolandi.org/wp-json/yolandi-shop/v1/download/node/${item.id}?token=${encodeURIComponent(t)}`).then(r => r.json());
+        if (!t) {
+          alert("Please login first.");
+          return;
+        }
+        const d = await fetch(
+          `https://yolandi.org/wp-json/yolandi-shop/v1/download/node/${item.id}?token=${encodeURIComponent(t)}`
+        ).then((r) => r.json());
         if (!d.download_url) throw new Error("No download URL");
         const res = await fetch(window.ajaxurl || "/wp-admin/admin-ajax.php", {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ action: "yolandi_install_node_zip", url: d.download_url })
-        }).then(r => r.json());
-        if (res?.success || res?.ok) { window.YOLANDI.log?.(`Installed: ${item.name}`, "INFO"); }
-        else { throw new Error(res?.error || "Install failed"); }
-      } catch (e) { window.YOLANDI.log?.("Install error: " + (e.message || e), "ERROR"); }
+          body: new URLSearchParams({ action: "yolandi_install_node_zip", url: d.download_url }),
+        }).then((r) => r.json());
+        if (res?.success || res?.ok) {
+          window.YOLANDI.log?.(`Installed: ${item.name}`, "INFO");
+        } else {
+          throw new Error(res?.error || "Install failed");
+        }
+      } catch (e) {
+        window.YOLANDI.log?.("Install error: " + (e.message || e), "ERROR");
+      }
     };
   }, [auth]);
 
   /* ----- runner (no DB jobs) ----- */
   function getGraphSnapshot() {
     const doc = canvasApiRef.current?.exportJSON() || { nodes: [], links: [] };
-    const byId = Object.fromEntries((doc.nodes || []).map(n => [n.id, n]));
-    const inDeg = Object.fromEntries((doc.nodes || []).map(n => [n.id, 0]));
+    const byId = Object.fromEntries((doc.nodes || []).map((n) => [n.id, n]));
+    const inDeg = Object.fromEntries((doc.nodes || []).map((n) => [n.id, 0]));
     const out = {};
-    for (const L of (doc.links || [])) {
+    for (const L of doc.links || []) {
       out[L.from.nid] = out[L.from.nid] || [];
       out[L.from.nid].push(L.to.nid);
       inDeg[L.to.nid] = (inDeg[L.to.nid] || 0) + 1;
@@ -772,7 +918,9 @@ export default function GraphTab() {
     else window.YOLANDI.runnerLog?.("✔ Runner finished");
     setRunner({ running: false, stopping: false });
   }
-  function pauseRunner() { setRunner((r) => ({ ...r, stopping: true })); }
+  function pauseRunner() {
+    setRunner((r) => ({ ...r, stopping: true }));
+  }
 
   /* ----- File menu: Export / Import ----- */
   function doExport() {
@@ -781,17 +929,27 @@ export default function GraphTab() {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `yolandi-workflow-${Date.now()}.json`;
-    a.click(); URL.revokeObjectURL(a.href);
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
-  function doImportFile() { fileInputRef.current?.click(); }
+  function doImportFile() {
+    fileInputRef.current?.click();
+  }
   function onImportChange(e) {
-    const file = e.target.files?.[0]; if (!file) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try { const doc = JSON.parse(String(reader.result)); canvasApiRef.current?.importJSON(doc); log("Workflow imported", "INFO"); }
-      catch (err) { log("Import failed: " + (err?.message || err), "ERROR"); }
+      try {
+        const doc = JSON.parse(String(reader.result));
+        canvasApiRef.current?.importJSON(doc);
+        log("Workflow imported", "INFO");
+      } catch (err) {
+        log("Import failed: " + (err?.message || err), "ERROR");
+      }
     };
-    reader.readAsText(file); e.target.value = "";
+    reader.readAsText(file);
+    e.target.value = "";
   }
 
   const fileMenu = [
@@ -819,7 +977,10 @@ export default function GraphTab() {
 
   const installedSlugs = useMemo(() => {
     const arr = [];
-    for (const n of manifest) { const s = n?.meta?.type || n?.meta?.title; if (s) arr.push(s); }
+    for (const n of manifest) {
+      const s = n?.meta?.type || n?.meta?.title;
+      if (s) arr.push(s);
+    }
     return Array.from(new Set(arr));
   }, [manifest]);
 
@@ -843,7 +1004,11 @@ export default function GraphTab() {
           />
         </div>
         <div className="right">
-          <button className={`nav-icon ${runner.running ? "active" : ""}`} title={runner.running ? "Pause Runner" : "Run Workflow"} onClick={() => (runner.running ? pauseRunner() : playRunner())}>
+          <button
+            className={`nav-icon ${runner.running ? "active" : ""}`}
+            title={runner.running ? "Pause Runner" : "Run Workflow"}
+            onClick={() => (runner.running ? pauseRunner() : playRunner())}
+          >
             <i className={`fa fa-${runner.running ? "pause" : "play"}`} />
           </button>
           <i className="fa-regular fa-bell"></i>
@@ -851,7 +1016,7 @@ export default function GraphTab() {
         </div>
       </div>
 
-      <div id="ystudio-main">
+      <div id="ystudio-main" style={{ paddingBottom: 28 }}>
         {/* Activity bar */}
         <div id="ystudio-activity">
           {activityItems.map((it) => (
@@ -885,9 +1050,7 @@ export default function GraphTab() {
 
           <div className="palette-scroll">
             {activePanel === "shop" ? (
-              <div style={{ padding: 8, color: "#bbb", fontSize: 12 }}>
-                Browse premium & free nodes in the main area →
-              </div>
+              <div style={{ padding: 8, color: "#bbb", fontSize: 12 }}>Browse premium & free nodes in the main area →</div>
             ) : (
               <NodeTree
                 grouped={grouped}
@@ -908,74 +1071,99 @@ export default function GraphTab() {
           <div className="tabs">
             {tabs.map((t) => (
               <div key={t.id} className={`tab ${t.id === activeTabId ? "active" : ""}`} onClick={() => setActiveTabId(t.id)}>
-                <span className="name">{t.title}{t.dirty ? "*" : ""}</span>
-                <button className="close" onClick={(e) => (e.stopPropagation(), closeTab(t.id))}><i className="fa fa-xmark"></i></button>
+                <span className="name">
+                  {t.title}
+                  {t.dirty ? "*" : ""}
+                </span>
+                <button className="close" onClick={(e) => (e.stopPropagation(), closeTab(t.id))}>
+                  <i className="fa fa-xmark"></i>
+                </button>
               </div>
             ))}
-            <button className="tab add" onClick={openNewTab} title="New Workflow"><i className="fa fa-plus"></i></button>
+            <button className="tab add" onClick={openNewTab} title="New Workflow">
+              <i className="fa fa-plus"></i>
+            </button>
           </div>
 
-          {/* Canvas OR Shop View */}
-          <div
-            id="ystudio-editor-host"
-            style={{ position: "relative", flex: 1, minHeight: 0 }}
-            onDragOver={(e) => {
-              if (e.dataTransfer?.types?.includes("application/x-yolandi-node")) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "copy";
-              }
-            }}
-            onDrop={(e) => {
-              const dt = e.dataTransfer?.getData("application/x-yolandi-node");
-              if (!dt) return;
-              e.preventDefault();
-              const meta = JSON.parse(dt);
-              // IMPORTANT: pass client coords; NodeCanvas converts to world
-              window.YOLANDI.actions.onNodeDrop?.(meta, { x: e.clientX, y: e.clientY });
-            }}
-          >
-            {activePanel === "shop" ? (
-              <ShopView auth={auth} installedSlugs={installedSlugs} onClose={() => setActivePanel("puppeteer")} />
-            ) : (
-              <NodeCanvas registerApi={(api) => (canvasApiRef.current = api)} />
-            )}
-          </div>
+          {/* Canvas OR Shop View + Bottom panel */}
+          <div id="ystudio-editor-host" style={{ position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div className="canvas-wrap" style={{ position: "relative", flex: "1 1 auto", minHeight: 0 }}>
+              {activePanel === "shop" ? (
+                <ShopView auth={auth} installedSlugs={installedSlugs} onClose={() => setActivePanel("puppeteer")} />
+              ) : (
+                <NodeCanvas registerApi={(api) => (canvasApiRef.current = api)} />
+              )}
+            </div>
 
-          {/* Bottom panel */}
-          <div id="ystudio-panel" ref={panelRef} style={{ "--panel-height": "220px" }}>
-            <div id="ystudio-panel-tabs">
-              <div className={`tab ${panelTab==="console"?"active":""}`} onClick={()=>setPanelTab("console")}><i className="fa fa-terminal" /> Console</div>
-              <div className={`tab ${panelTab==="runner"?"active":""}`} onClick={()=>setPanelTab("runner")}><i className="fa fa-gauge-high" /> Runner Log</div>
-              <div className="spacer" />
-              <div className="controls">
-                <button onClick={() => (document.querySelector(panelTab==="console"?"#ystudio-terminal pre":"#ystudio-runner pre").textContent = "")} title="Clear"><i className="fa fa-broom"></i></button>
-                <button onClick={() => log("Ping")} title="Test log"><i className="fa fa-message"></i></button>
-                <button onClick={() => log(JSON.stringify(window.YOLANDI.exportWorkflow?.() || {}, null, 2), "DATA")} title="Dump JSON"><i className="fa fa-file-code"></i></button>
+            {/* Bottom panel */}
+            <div
+              id="ystudio-panel"
+              ref={panelRef}
+              style={{
+                "--panel-height": "220px",
+                height: "var(--panel-height)",
+                minHeight: 120,
+                overflow: "hidden",
+                flex: "0 0 auto",
+              }}
+            >
+              <div id="ystudio-panel-tabs">
+                <div className={`tab ${panelTab === "console" ? "active" : ""}`} onClick={() => setPanelTab("console")}>
+                  <i className="fa fa-terminal" /> Console
+                </div>
+                <div className={`tab ${panelTab === "runner" ? "active" : ""}`} onClick={() => setPanelTab("runner")}>
+                  <i className="fa fa-gauge-high" /> Runner Log
+                </div>
+                <div className="spacer" />
+                <div className="controls">
+                  <button
+                    onClick={() =>
+                      (document.querySelector(panelTab === "console" ? "#ystudio-terminal pre" : "#ystudio-runner pre").textContent =
+                        "")
+                    }
+                    title="Clear"
+                  >
+                    <i className="fa fa-broom"></i>
+                  </button>
+                  <button onClick={() => log("Ping")} title="Test log">
+                    <i className="fa fa-message"></i>
+                  </button>
+                  <button
+                    onClick={() => log(JSON.stringify(window.YOLANDI.exportWorkflow?.() || {}, null, 2), "DATA")}
+                    title="Dump JSON"
+                  >
+                    <i className="fa fa-file-code"></i>
+                  </button>
+                </div>
               </div>
+              <div id="ystudio-panel-body" style={{ height: "calc(var(--panel-height) - 32px)", overflow: "auto" }}>
+                <div id="ystudio-terminal" style={{ display: panelTab === "console" ? "block" : "none" }}>
+                  <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }} />
+                </div>
+                <div id="ystudio-runner" style={{ display: panelTab === "runner" ? "block" : "none" }}>
+                  <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }} />
+                </div>
+              </div>
+              <div id="ystudio-panel-drag" ref={panelDragRef} title="Resize panel" />
             </div>
-            <div id="ystudio-panel-body">
-              <div id="ystudio-terminal" style={{display: panelTab==="console"?"block":"none"}}><pre /></div>
-              <div id="ystudio-runner" style={{display: panelTab==="runner"?"block":"none"}}><pre /></div>
-            </div>
-            <div id="ystudio-panel-drag" ref={panelDragRef} title="Resize panel" />
           </div>
         </div>
-      </div>
 
-      {/* Auth modal */}
-      {showAuth && (
-        <AuthModal
-          onClose={() => setShowAuth(false)}
-          onLoggedIn={() => setShowAuth(false)}
-          login={authLogin}
-          register={authRegister}
-        />
-      )}
+        {/* Auth modal */}
+        {showAuth && (
+          <AuthModal onClose={() => setShowAuth(false)} onLoggedIn={() => setShowAuth(false)} login={authLogin} register={authRegister} />
+        )}
 
-      {/* Status bar */}
-      <div id="ystudio-statusbar">
-        <div className="left"><i className="fa fa-code-branch" /> main <span className="sep" /> <i className="fa fa-circle" /> Ready</div>
-        <div className="right"><i className="fa fa-gauge-high" /> Runner: {runner.running ? "running" : "idle"} <span className="sep" /> <i className="fa fa-rotate" /> Auto-save</div>
+        {/* Status bar */}
+        <div id="ystudio-statusbar" style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 30 }}>
+          <div className="left">
+            <i className="fa fa-code-branch" /> main <span className="sep" /> <i className="fa fa-circle" /> Ready
+          </div>
+          <div className="right">
+            <i className="fa fa-gauge-high" /> Runner: {runner.running ? "running" : "idle"} <span className="sep" />{" "}
+            <i className="fa fa-rotate" /> Auto-save
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -986,12 +1174,19 @@ function DropMenu({ label, items }) {
   const [open, setOpen] = useState(false);
   return (
     <div className={`menu ${open ? "open" : ""}`} onMouseLeave={() => setOpen(false)}>
-      <button onMouseEnter={() => setOpen(true)} onClick={() => setOpen((v) => !v)}>{label}</button>
+      <button onMouseEnter={() => setOpen(true)} onClick={() => setOpen((v) => !v)}>
+        {label}
+      </button>
       {open && (
         <div className="menu-popover">
           {items.map((it, i) =>
-            it.label === "—" ? <div key={i} className="menu-sep" /> :
-            <div key={i} className="menu-item" onClick={() => (setOpen(false), it.onClick && it.onClick())}>{it.label}</div>
+            it.label === "—" ? (
+              <div key={i} className="menu-sep" />
+            ) : (
+              <div key={i} className="menu-item" onClick={() => (setOpen(false), it.onClick && it.onClick())}>
+                {it.label}
+              </div>
+            )
           )}
         </div>
       )}
@@ -1008,26 +1203,29 @@ function NodeTree({ grouped, onDragStart }) {
   };
   return (
     <div className="node-tree">
-      {Object.keys(grouped).sort().map((folder) => (
-        <div key={folder} className="folder">
-          <div className="folder-head" onClick={() => toggle(folder)}>
-            <i className={`fa fa-caret-${open.has(folder) ? "down" : "right"}`} />
-            <span>{folder}</span>
-          </div>
-          {open.has(folder) && (
-            <div className="folder-body">
-              {grouped[folder].map((n) => {
-                const name = n?.meta?.title || n?.meta?.type || n?.path || "Node";
-                return (
-                  <div key={name + n.path} className="node-item" draggable title={name} onDragStart={(e) => onDragStart(e, n)}>
-                    <i className="fa fa-cube" /><span>{name}</span>
-                  </div>
-                );
-              })}
+      {Object.keys(grouped)
+        .sort()
+        .map((folder) => (
+          <div key={folder} className="folder">
+            <div className="folder-head" onClick={() => toggle(folder)}>
+              <i className={`fa fa-caret-${open.has(folder) ? "down" : "right"}`} />
+              <span>{folder}</span>
             </div>
-          )}
-        </div>
-      ))}
+            {open.has(folder) && (
+              <div className="folder-body">
+                {grouped[folder].map((n) => {
+                  const name = n?.meta?.title || n?.meta?.type || n?.path || "Node";
+                  return (
+                    <div key={name + n.path} className="node-item" draggable title={name} onDragStart={(e) => onDragStart(e, n)}>
+                      <i className="fa fa-cube" />
+                      <span>{name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ))}
     </div>
   );
 }
@@ -1039,7 +1237,7 @@ function ShopView({ auth, installedSlugs, onClose }) {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
 
-  async function fetchPage(p=1) {
+  async function fetchPage(p = 1) {
     setLoading(true);
     try {
       const url = new URL("https://yolandi.org/wp-json/yolandi-shop/v1/products");
@@ -1048,37 +1246,74 @@ function ShopView({ auth, installedSlugs, onClose }) {
       url.searchParams.set("installed_slugs", JSON.stringify(installedSlugs || []));
       const res = await fetch(url, { headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {} });
       const j = await res.json();
-      if (p === 1) setItems(j.items || []); else setItems((x) => [...x, ...(j.items||[])]);
+      if (p === 1) setItems(j.items || []);
+      else setItems((x) => [...x, ...(j.items || [])]);
       setPage(j.page || p);
       setHasMore(!!j.has_more);
     } catch {
-      setItems(Array.from({length:9}).map((_,i)=>({
-        id: 1000+i, name: "Premium Node "+(i+1), slug:"demo.node"+i,
-        short_description:"Premium capability node.", price_html:"$9.00",
-        image:"", rating_count:10, average_rating:4.6, purchased:false, installed:false, downloadable:false
-      })));
+      setItems(
+        Array.from({ length: 9 }).map((_, i) => ({
+          id: 1000 + i,
+          name: "Premium Node " + (i + 1),
+          slug: "demo.node" + i,
+          short_description: "Premium capability node.",
+          price_html: "$9.00",
+          image: "",
+          rating_count: 10,
+          average_rating: 4.6,
+          purchased: false,
+          installed: false,
+          downloadable: false,
+        }))
+      );
       setHasMore(false);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
-  useEffect(()=>{ fetchPage(1); },[]);
+  useEffect(() => {
+    fetchPage(1);
+  }, []);
 
   async function addToCart(prodId) {
     try {
       const res = await fetch("https://yolandi.org/wp-json/yolandi-shop/v1/order", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json", ...(auth.token?{Authorization:`Bearer ${auth.token}`}:{}) },
-        body: JSON.stringify({ items: [{ product_id: prodId, quantity: 1 }] })
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {}) },
+        body: JSON.stringify({ items: [{ product_id: prodId, quantity: 1 }] }),
       });
       const j = await res.json();
       if (j.payment_url) {
         const iframe = document.createElement("iframe");
-        Object.assign(iframe.style,{position:"fixed",inset:"40px",border:"1px solid #2b2b2b",borderRadius:"8px",zIndex:9999,background:"#fff"});
+        Object.assign(iframe.style, {
+          position: "fixed",
+          inset: "40px",
+          border: "1px solid #2b2b2b",
+          borderRadius: "8px",
+          zIndex: 9999,
+          background: "#fff",
+        });
         iframe.src = j.payment_url;
         const close = document.createElement("button");
         close.innerHTML = "×";
-        Object.assign(close.style,{position:"fixed",top:"10px",right:"10px",zIndex:10000,background:"#1e1e1e",color:"#fff",border:"0",borderRadius:"6px",width:"32px",height:"32px"});
-        close.onclick = ()=>{ iframe.remove(); close.remove(); };
-        document.body.appendChild(iframe); document.body.appendChild(close);
+        Object.assign(close.style, {
+          position: "fixed",
+          top: "10px",
+          right: "10px",
+          zIndex: 10000,
+          background: "#1e1e1e",
+          color: "#fff",
+          border: "0",
+          borderRadius: "6px",
+          width: "32px",
+          height: "32px",
+        });
+        close.onclick = () => {
+          iframe.remove();
+          close.remove();
+        };
+        document.body.appendChild(iframe);
+        document.body.appendChild(close);
       }
     } catch {}
   }
@@ -1086,66 +1321,114 @@ function ShopView({ auth, installedSlugs, onClose }) {
   return (
     <div className="shop-wrap">
       <div className="shop-head">
-        <div className="left"><i className="fa fa-store" /> YOLANDI Marketplace</div>
+        <div className="left">
+          <i className="fa fa-store" /> YOLANDI Marketplace
+        </div>
         <div className="right">
-          <button className="btn" onClick={()=>fetchPage(1)}><i className="fa fa-rotate" /> Refresh</button>
-          <button className="btn" onClick={onClose}><i className="fa fa-xmark" /> Close</button>
+          <button className="btn" onClick={() => fetchPage(1)}>
+            <i className="fa fa-rotate" /> Refresh
+          </button>
+          <button className="btn" onClick={onClose}>
+            <i className="fa fa-xmark" /> Close
+          </button>
         </div>
       </div>
       <div className="shop-grid">
-        {items.map(it => (
+        {items.map((it) => (
           <div key={it.id} className="shop-card">
             <div className="thumb">{it.image ? <img src={it.image} alt="" /> : <i className="fa fa-cube" />}</div>
-            <div className="name" title={it.name}>{it.name}</div>
+            <div className="name" title={it.name}>
+              {it.name}
+            </div>
             <div className="desc">{it.short_description}</div>
             <div className="meta">
-              <span className="price" dangerouslySetInnerHTML={{__html: it.price_html || ""}} />
-              <span className="rate"><i className="fa fa-star" /> {it.average_rating?.toFixed?.(1) || "—"}</span>
+              <span className="price" dangerouslySetInnerHTML={{ __html: it.price_html || "" }} />
+              <span className="rate">
+                <i className="fa fa-star" /> {it.average_rating?.toFixed?.(1) || "—"}
+              </span>
             </div>
             {it.installed ? (
-              <button className="btn installed" disabled>Installed</button>
+              <button className="btn installed" disabled>
+                Installed
+              </button>
             ) : it.purchased ? (
-              <button className="btn" onClick={()=>window.YOLANDI.actions.installPurchased?.(it)}>Download</button>
+              <button className="btn" onClick={() => window.YOLANDI.actions.installPurchased?.(it)}>
+                Download
+              </button>
             ) : (
-              <button className="btn primary" onClick={()=>addToCart(it.id)}>Add to Cart</button>
+              <button className="btn primary" onClick={() => addToCart(it.id)}>
+                Add to Cart
+              </button>
             )}
           </div>
         ))}
         {loading && <div className="loading">Loading…</div>}
       </div>
-      {hasMore && <div className="shop-more"><button className="btn" onClick={()=>fetchPage(page+1)}>Load more</button></div>}
+      {hasMore && (
+        <div className="shop-more">
+          <button className="btn" onClick={() => fetchPage(page + 1)}>
+            Load more
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ---------- Auth modal ---------- */
 function AuthModal({ onClose, onLoggedIn, login, register }) {
-  const [mode,setMode]=useState("login");
-  const [f,setF]=useState({username:"",email:"",password:""});
-  const [err,setErr]=useState("");
+  const [mode, setMode] = useState("login");
+  const [f, setF] = useState({ username: "", email: "", password: "" });
+  const [err, setErr] = useState("");
   async function go() {
-    const ok = mode==="login"
-      ? await login({username:f.username, password:f.password})
-      : await register({email:f.email, username:f.username, password:f.password});
-    if (!ok) setErr("Authentication failed"); else onLoggedIn();
+    const ok =
+      mode === "login"
+        ? await login({ username: f.username, password: f.password })
+        : await register({ email: f.email, username: f.username, password: f.password });
+    if (!ok) setErr("Authentication failed");
+    else onLoggedIn();
   }
   return (
     <div className="auth-mask">
       <div className="auth-modal">
-        <div className="head"><b>Sign in to YOLANDI.org</b><button onClick={onClose}><i className="fa fa-xmark"/></button></div>
+        <div className="head">
+          <b>Sign in to YOLANDI.org</b>
+          <button onClick={onClose}>
+            <i className="fa fa-xmark" />
+          </button>
+        </div>
         <div className="body">
-          {mode==="register" && <label>Email <input type="email" value={f.email} onChange={(e)=>setF({...f,email:e.target.value})}/></label>}
-          <label>Username <input value={f.username} onChange={(e)=>setF({...f,username:e.target.value})}/></label>
-          <label>Password <input type="password" value={f.password} onChange={(e)=>setF({...f,password:e.target.value})}/></label>
+          {mode === "register" && (
+            <label>
+              Email <input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+            </label>
+          )}
+          <label>
+            Username <input value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} />
+          </label>
+          <label>
+            Password <input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
+          </label>
           {err && <div className="err">{err}</div>}
         </div>
         <div className="foot">
-          <button onClick={go} className="primary">{mode==="login"?"Login":"Create Account"}</button>
-          <button onClick={()=>setMode(mode==="login"?"register":"login")} className="ghost">
-            {mode==="login"?"Create an account":"Back to login"}
+          <button onClick={go} className="primary">
+            {mode === "login" ? "Login" : "Create Account"}
+          </button>
+          <button onClick={() => setMode(mode === "login" ? "register" : "login")} className="ghost">
+            {mode === "login" ? "Create an account" : "Back to login"}
           </button>
           <div className="grow" />
-          <button onClick={()=>{window.YOLANDI.devBypass(); onLoggedIn();}} className="ghost" title="Developer bypass">Bypass</button>
+          <button
+            onClick={() => {
+              window.YOLANDI.devBypass();
+              onLoggedIn();
+            }}
+            className="ghost"
+            title="Developer bypass"
+          >
+            Bypass
+          </button>
         </div>
       </div>
     </div>
