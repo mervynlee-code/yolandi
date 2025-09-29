@@ -1,4 +1,5 @@
 <?php
+// class-nodes.php 
 /**
  * YOLANDI Nodes – discovery & bundling of custom node modules + local libs
  *
@@ -31,7 +32,42 @@ if (!class_exists('YOLANDI_Nodes')) {
             return wp_normalize_path(dirname(__DIR__) . '/lib/stealth-api');
         }
 
-        /** List discovered nodes with meta. */
+        /**
+         * Recursively find all .mjs files under $root.
+         * Returns array of [abs, rel] where rel is the path relative to $root.
+         */
+        protected static function find_mjs_files(string $root): array
+        {
+            $root = wp_normalize_path($root);
+            if (!is_dir($root)) { return []; }
+
+            $it = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator(
+                    $root,
+                    FilesystemIterator::SKIP_DOTS | FilesystemIterator::FOLLOW_SYMLINKS
+                ),
+                RecursiveIteratorIterator::LEAVES_ONLY
+            );
+
+            $out = [];
+            foreach ($it as $file) {
+                /** @var SplFileInfo $file */
+                if (!$file->isFile()) { continue; }
+                $abs = wp_normalize_path($file->getPathname());
+                // Skip heavy/unwanted dirs
+                if (strpos($abs, '/.git/') !== false || strpos($abs, '/node_modules/') !== false) { continue; }
+                if (strtolower(pathinfo($abs, PATHINFO_EXTENSION)) !== 'mjs') { continue; }
+                $rel = ltrim(substr($abs, strlen($root)), '/');
+                $out[] = [$abs, str_replace('\\', '/', $rel)];
+            }
+
+            usort($out, static function ($a, $b) {
+                return strcmp($a[1], $b[1]); // sort by relative path for stable order
+            });
+            return $out;
+        }
+
+        /** List discovered nodes with meta. (Now recursive) */
         public static function list(): array
         {
             $dir = self::nodes_dir();
@@ -39,10 +75,10 @@ if (!class_exists('YOLANDI_Nodes')) {
                 return [];
             }
             $out = [];
-            foreach (glob($dir . '/*.mjs') as $abs) {
+            foreach (self::find_mjs_files($dir) as [$abs, $rel]) {
                 $meta = self::extract_meta_from_node($abs);
                 $out[] = [
-                    'path' => basename($abs),
+                    'path' => $rel,  // preserve subdirectory path
                     'meta' => $meta,
                 ];
             }
@@ -52,6 +88,7 @@ if (!class_exists('YOLANDI_Nodes')) {
         /**
          * Build and stream a zip bundle with nodes and local lib for runners.
          * Auth is enforced by the REST route permission callback.
+         * (Now recursive; subfolder structure preserved in zip)
          */
         public static function bundle(WP_REST_Request $req)
         {
@@ -59,8 +96,9 @@ if (!class_exists('YOLANDI_Nodes')) {
             if (!is_dir($nodesDir)) {
                 return new WP_Error('not_found', 'nodes directory missing', ['status' => 404]);
             }
-            $nodeFiles = glob($nodesDir . '/*.mjs');
-            sort($nodeFiles);
+
+            // Collect node files recursively: [ [abs, rel], ... ]
+            $nodePairs = self::find_mjs_files($nodesDir);
 
             // Optional: include the local library (recursively) so nodes can import relatively
             $libRoot = self::local_lib_root();
@@ -75,7 +113,8 @@ if (!class_exists('YOLANDI_Nodes')) {
                 sort($libFiles);
             }
 
-            $etag = self::build_etag(array_merge($nodeFiles, $libFiles));
+            // Build ETag across all absolute files (nodes + lib)
+            $etag = self::build_etag(array_merge(array_map(static function ($p) { return $p[0]; }, $nodePairs), $libFiles));
             $ifNone = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim((string) $_SERVER['HTTP_IF_NONE_MATCH']) : '';
             if ($ifNone !== '' && $ifNone === $etag) {
                 status_header(304);
@@ -88,19 +127,19 @@ if (!class_exists('YOLANDI_Nodes')) {
                 return new WP_Error('io_error', 'Failed to open zip');
             }
 
-            // Add node files at bundle root
+            // Add node files under their relative paths; generate index importing those paths.
             $index = "export const registry = {}\n";
-            foreach ($nodeFiles as $abs) {
-                $name = basename($abs);
+            foreach ($nodePairs as [$abs, $rel]) {
                 $src = file_get_contents($abs);
                 if ($src === false) {
                     continue;
                 }
-                $zip->addFromString($name, $src);
+                $zip->addFromString($rel, $src);
                 $meta = self::extract_meta_from_node($abs);
-                $type = $meta['type'] ?? pathinfo($name, PATHINFO_FILENAME);
-                $index .= "import * as m_" . self::safe_ident($name) . " from './$name'\n";
-                $index .= "registry['" . addslashes($type) . "'] = { ...m_" . self::safe_ident($name) . " }\n";
+                $type = $meta['type'] ?? pathinfo($rel, PATHINFO_FILENAME);
+                $ident = self::safe_ident($rel); // alias for import
+                $index .= "import * as m_" . $ident . " from './" . $rel . "'\n";
+                $index .= "registry['" . addslashes($type) . "'] = { ...m_" . $ident . " }\n";
             }
 
             // Add local library under ./lib/stealth-api/**

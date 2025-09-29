@@ -3,7 +3,7 @@ export const meta = {
     title: "Random User Interaction",
     category: "Behavior",
     version: 1,
-    props: { maxScrolls: { type: "number", default: 3 }, clickLinks: { type: "boolean", default: false } }
+    props: { maxScrolls: { type: "number", default: 3 }, clickLinks: { type: "boolean", default: false } },
 };
 export function defineEditorNode({ Baklava }) {
     return new Baklava.NodeBuilder(meta.type)

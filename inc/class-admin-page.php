@@ -29,7 +29,7 @@ if (!class_exists('YOLANDI_Admin_Page')) {
             if (!current_user_can('manage_yolandi_scripts')) {
                 return;
             }
-            add_menu_page(
+            $hook = add_menu_page(
                 __('YOLANDI', 'yolandi'),
                 __('YOLANDI', 'yolandi'),
                 'manage_yolandi_scripts',
@@ -38,11 +38,21 @@ if (!class_exists('YOLANDI_Admin_Page')) {
                 'dashicons-media-code',
                 59
             );
+
+            /* Removes Admin Sidebar */
+            add_action("admin_head-{$hook}", function () {
+                echo '<style>
+            #adminmenumain, #adminmenuback, #adminmenuwrap, #adminmenu, #collapse-menu { display:none !important; }
+            #wpcontent, #wpfooter { margin-left: 0 !important; }
+            body.wp-admin { min-width: 0 !important; }
+        </style>';
+            });
         }
 
         /** Echo the SPA mount point. */
         public static function render_root(): void
-        { ?>
+        {
+            ?>
             <div id="yolandi-root" style="min-height: calc(100vh - 150px);">
                 <noscript><?php echo esc_html__('This page requires JavaScript.', 'yolandi'); ?></noscript>
             </div>
