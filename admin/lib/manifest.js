@@ -1,0 +1,6 @@
+// =========================
+// FILE: admin/lib/manifest.js
+// =========================
+export function ensureFA(){ if(document.getElementById("fa-cdn")) return; const link=document.createElement("link"); link.id="fa-cdn"; link.rel="stylesheet"; link.href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"; document.head.appendChild(link); }
+function wpRestInfo(){ const root=(window.wpApiSettings&&window.wpApiSettings.root)||(window.wp&&window.wp.apiSettings&&window.wp.apiSettings.root)||"/wp-json/"; const nonce=(window.wpApiSettings&&window.wpApiSettings.nonce)||(window.wp&&window.wp.apiSettings&&window.wp.apiSettings.nonce)||null; return { root: root.replace(/\/$/,""), nonce }; }
+export async function getNodesManifestCompat(){ try{ const API=await import(/* @vite-ignore */ "../core/api"); const fn=API.getNodesManifest||(API.default&&API.default.getNodesManifest); if(typeof fn==="function"){ const out=await fn(); return Array.isArray(out)?out:[]; } }catch{} const {root,nonce}=wpRestInfo(); const res=await fetch(`${root}/yolandi/v1/nodes`,{ credentials:"same-origin", headers: nonce?{"X-WP-Nonce":nonce}:{}}); if(!res.ok) throw new Error(`Nodes fetch failed: ${res.status}`); const j=await res.json(); return Array.isArray(j)?j:[]; }
