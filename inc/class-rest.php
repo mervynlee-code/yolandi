@@ -309,6 +309,9 @@ if (!class_exists('YOLANDI_Rest')) {
         }
 
         // Robustly parse `export const meta = { ... }` from a .mjs file
+        // Robustly parse `export const meta = { ... }` from a .mjs file (single quotes ok)
+// Parse `export const meta = { ... }` robustly (handles comments, single quotes, trailing commas)
+// Robustly parse `export const meta = { ... }` from a .mjs file
         protected static function extract_meta_from_node(string $abs): array
         {
             $src = @file_get_contents($abs);

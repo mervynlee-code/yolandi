@@ -6,8 +6,11 @@ import path from 'node:path';
 // Vite builds admin/index.html → admin/admin.js + admin/admin.css
 // We output non-hashed file names so PHP can enqueue fixed asset names.
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   root: path.resolve(__dirname, 'admin'),
+  base: command === 'build'
+    ? '/wp-content/plugins/yolandi/admin/dist/'  // <-- absolute URL base for chunks in WP
+    : '/',
   plugins: [
     react(),
     // monacoEditorPlugin({
@@ -36,4 +39,4 @@ export default defineConfig({
     port: 5173,
     open: false,
   },
-});
+}));
