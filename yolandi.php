@@ -150,27 +150,66 @@ add_action( 'yolandi_queue_watchdog', function () {
     }
 });
 
-/* -------------------------------------------------------------------------- */
-/* Top-level Admin Menu (fallback)                                             */
-/* -------------------------------------------------------------------------- */
-// If the dedicated class didn't create it, provide a lightweight fallback so
-// developers can still access the SPA mount.
-add_action( 'admin_menu', function () {
-    if ( ! current_user_can( 'manage_yolandi_scripts' ) ) { return; }
-    global $menu;
-    $slug = 'yolandi-admin';
-    $exists = false;
-    foreach ( (array) $menu as $item ) {
-        if ( isset( $item[2] ) && $item[2] === $slug ) { $exists = true; break; }
+require_once __DIR__ . '/inc/class-security.php';
+require_once __DIR__ . '/inc/class-rest-jobs.php';
+require_once __DIR__ . '/inc/class-queue.php'; // ensure the queue class is loaded
+
+    function rest_lease(WP_REST_Request $req)
+    {
+      var_dump($req);
+      $j = $req->get_json_params() ?: [];
+      $runner_id = sanitize_text_field($j['runner_id'] ?? '');
+
+      var_dump($runner_id);
+      if (!$runner_id)
+        $runner_id = 'runner-unknown';
+      $lease_seconds = isset($j['lease_seconds']) ? (int) $j['lease_seconds'] : (int) YOLANDI_Queue::settings()['lease_seconds'];
+
+      $job = YOLANDI_Queue::lease($lease_seconds, $runner_id);
+      if (!$job)
+        return new WP_REST_Response(null, 204); // no jobs available
+      return rest_ensure_response($job);
     }
-    if ( $exists ) { return; }
-    add_menu_page(
-        __( 'YOLANDI', 'yolandi' ),
-        __( 'YOLANDI', 'yolandi' ),
-        'manage_yolandi_scripts',
-        $slug,
-        function () { echo '<div id="yolandi-root"></div>'; },
-        'dashicons-media-code',
-        59
-    );
+
+add_action('rest_api_init', function ($server) {
+
+  register_rest_route('yolandi/v1', '/jobs/lease', [
+    'methods'             => 'POST',
+    'callback'            => ['YOLANDI_Rest_Jobs', 'lease'],       // <— use wrapper
+    'permission_callback' => ['YOLANDI_Security', 'permission_callback'],
+    // 'permission_callback' => '__return_true',
+  ]);
+
+  register_rest_route('yolandi/v1', '/jobs/(?P<id>[A-Za-z0-9._-]+)/heartbeat', [
+    'methods'             => 'POST',
+    'callback'            => ['YOLANDI_Rest_Jobs', 'rest_heartbeat'],   // <— wrapper
+    // 'permission_callback' => ['YOLANDI_Security', 'permission_callback'],
+    'permission_callback' => '__return_true',
+  ]);
+
+  register_rest_route('yolandi/v1', '/jobs/(?P<id>[A-Za-z0-9._-]+)/report', [
+    'methods'             => 'POST',
+    'callback'            => ['YOLANDI_Rest_Jobs', 'rest_report'],      // <— wrapper
+    // 'permission_callback' => ['YOLANDI_Security', 'permission_callback'],
+    'permission_callback' => '__return_true',
+  ]);
+
+  // DEBUG: log which callback is actually registered for lease
+  if (defined('WP_DEBUG') && WP_DEBUG) {
+    $routes = $server->get_routes();
+    error_log('YOLANDI lease route callback: ' . print_r($routes['/yolandi/v1/jobs/lease'][0]['callback'] ?? null, true));
+  }
+}, 100); // run late so we can override any earlier registrations
+
+define('YOLANDI_DEBUG_AUTH', true); // <-- our toggle
+add_filter('rest_authentication_errors', function($result){
+  if (!defined('YOLANDI_DEBUG_AUTH') || !YOLANDI_DEBUG_AUTH) return $result;
+  if (is_wp_error($result)) {
+    error_log('[REST_AUTH] ' . $result->get_error_code() . ' :: ' . $result->get_error_message());
+  } elseif ($result === true) {
+    error_log('[REST_AUTH] core auth: allowed');
+  } else {
+    error_log('[REST_AUTH] core auth: not decided');
+  }
+  return $result;
 });

@@ -29,6 +29,24 @@ export default function Menubar({ isRunning, isPaused, isTerminal, onPlayPause, 
             </div>
           )}
         </div>
+        <div className={`menu ${nodesOpen.current ? "open" : ""}`} onMouseLeave={()=>{nodesOpen.current=false;}}>
+          <button onMouseEnter={()=>{nodesOpen.current=true;}} onClick={()=>{nodesOpen.current=!nodesOpen.current;}}>Workflows</button>
+          {nodesOpen.current && (
+            <div className="menu-popover">
+              <div className="menu-item" onClick={()=>log("Open Monaco…","INFO")}>New Workflow</div>
+              <div className="menu-item" onClick={()=>log("Open Monaco…","INFO")}>View Workflows</div>
+            </div>
+          )}
+        </div>
+        <div className={`menu ${nodesOpen.current ? "open" : ""}`} onMouseLeave={()=>{nodesOpen.current=false;}}>
+          <button onMouseEnter={()=>{nodesOpen.current=true;}} onClick={()=>{nodesOpen.current=!nodesOpen.current;}}>Jobs</button>
+          {nodesOpen.current && (
+            <div className="menu-popover">
+              <div className="menu-item" onClick={()=>log("Open Monaco…","INFO")}>New Job</div>
+              <div className="menu-item" onClick={()=>log("Open Monaco…","INFO")}>View Jobs</div>
+            </div>
+          )}
+        </div>
       </div>
       <div className="right">
         <button className={`nav-icon ${isRunning ? "active" : ""}`} title={!isRunning?"Run Workflow": isPaused?"Resume Job":"Pause Job"} onClick={onPlayPause}>

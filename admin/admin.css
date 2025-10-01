@@ -1107,8 +1107,12 @@
 #adminmenuback,
 #adminmenuwrap,
 #adminmenu,
-#collapse-menu {
+#collapse-menu,
+#wpfooter {
   display: none !important;
+}
+#wpbody-content {
+    padding-bottom: unset;
 }
 
 #wpcontent,

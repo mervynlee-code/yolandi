@@ -24,6 +24,7 @@ async function lease(runnerId, leaseSeconds = 90) {
     headers: H,
     body: JSON.stringify({ runner_id: runnerId, lease_seconds: leaseSeconds }),
   });
+  console.log(r)
   if (r.status === 204) return null;
   if (!r.ok) throw new Error(`lease ${r.status}`);
   return r.json();
@@ -503,11 +504,12 @@ async function main() {
   }
   console.log(`[YOLANDI Runner] nodes dir = ${NODES_DIR}`);
   for (;;) {
-    const job = await lease(runnerId).catch((e) => (console.error("lease err", e.message), null));
+    const job = await lease(runnerId).catch((e) => (console.error("lease err", e), null));
     if (!job) {
       await sleep(2000);
       continue;
     }
+    console.log(job)
     await runJob(job, runnerId);
   }
 }

@@ -122,6 +122,7 @@ class YOLANDI_Queue {
      * @return array|null job payload with `graph` key, or null if none available
      */
     public static function lease( int $lease_seconds, string $runner_id ) : ?array {
+        // return ["msg" => "TESTING"];
         global $wpdb;
         $table = self::table();
         $lease_seconds = max( 30, $lease_seconds );
@@ -129,12 +130,13 @@ class YOLANDI_Queue {
         $wpdb->query( 'START TRANSACTION' );
 
         // Select next available job under row lock
-        $row = $wpdb->get_row( "SELECT * FROM `{$table}`
+        $row = $wpdb->get_row( `SELECT * FROM $table
             WHERE status IN ('queued','retrying')
               AND (lease_expires_at IS NULL OR lease_expires_at < UTC_TIMESTAMP())
             ORDER BY priority ASC, created_at ASC
             LIMIT 1
-            FOR UPDATE" );
+            FOR UPDATE` );
+            return $row;
 
         if ( ! $row ) {
             $wpdb->query( 'COMMIT' );
@@ -157,6 +159,7 @@ class YOLANDI_Queue {
         if ( $updated === false ) {
             return null;
         }
+
 
         $job = self::get( $id );
         if ( ! $job ) {

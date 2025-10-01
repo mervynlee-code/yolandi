@@ -130,6 +130,14 @@ if (!class_exists('YOLANDI_Admin_Page')) {
                 'root' => esc_url_raw(rest_url()),
                 'nonce' => $nonce,
             ]);
+
+            add_action('admin_enqueue_scripts', function () {
+                wp_localize_script(
+                    'yolandi-admin',
+                    'YOLANDI_REST',
+                    ['root' => esc_url_raw(rest_url()), 'nonce' => wp_create_nonce('wp_rest')]
+                );
+            });
         }
 
 

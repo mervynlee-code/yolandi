@@ -21,7 +21,7 @@ export default function Sidebar({ activePanel, setActivePanel, paletteOpen, setP
       <div id="ystudio-sidebar">
         <div className="sidebar-header">
           <span className="label">{items.find(x=>x.id===activePanel)?.title || "Panel"}</span>
-          <button className="icon-btn" onClick={togglePalette} title="Toggle Sidebar"><i className="fa fa-angles-left"></i></button>
+          <button className="icon-btn" onClick={togglePalette} title="Toggle Sidebar"><i className="fa fa-spider"></i></button>
         </div>
         <div className="palette-scroll">
           {items.find(x=>x.id===activePanel)?.render()}

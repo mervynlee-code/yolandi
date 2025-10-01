@@ -34,11 +34,11 @@ function App() {
   return (
     <div style={{ padding: 12 }}>
       <h1>YOLANDI Admin</h1>
-      <TabNav
+      {/* <TabNav
         routes={routes}
         activeKey={routeKey}
         onNavigate={(key) => navigate(key)}
-      />
+      /> */}
       <ActiveComponent />
     </div>
   );
