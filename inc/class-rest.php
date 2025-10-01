@@ -10,6 +10,8 @@
 if (!defined('ABSPATH')) {
     exit;
 }
+// Ensure the FS class is loaded once.
+require_once __DIR__ . '/class-workflows.php';
 
 if (!class_exists('YOLANDI_Rest')) {
 
@@ -104,13 +106,30 @@ if (!class_exists('YOLANDI_Rest')) {
                 'methods' => 'GET',
                 'callback' => [__CLASS__, 'macros_list'],
                 'permission_callback' => function () {
-                    return current_user_can('manage_yolandi_scripts'); },
+                    return current_user_can('manage_yolandi_scripts');
+                },
             ]);
             register_rest_route('yolandi/v1', '/macros', [
                 'methods' => 'POST',
                 'callback' => [__CLASS__, 'macros_save'],
                 'permission_callback' => function () {
-                    return current_user_can('manage_yolandi_scripts'); },
+                    return current_user_can('manage_yolandi_scripts');
+                },
+            ]);
+            register_rest_route('yolandi/v1', '/fs/ls', [
+                'methods' => 'GET',
+                'callback' => ['YOLANDI_Workflows_FS', 'ls'],
+                'permission_callback' => "__return_true"
+                // 'permission_callback' => function () {
+                //     return current_user_can('manage_options'); },
+            ]);
+
+            register_rest_route('yolandi/v1', '/fs/save', [
+                'methods' => 'POST',
+                'callback' => ['YOLANDI_Workflows_FS', 'save'],
+                'permission_callback' => "__return_true"
+                // 'permission_callback' => function () {
+                //     return current_user_can('manage_options'); },
             ]);
         }
 
@@ -260,10 +279,16 @@ if (!class_exists('YOLANDI_Rest')) {
             );
             foreach ($it as $file) {
                 /** @var SplFileInfo $file */
-                if (!$file->isFile()) { continue; }
+                if (!$file->isFile()) {
+                    continue;
+                }
                 $abs = wp_normalize_path($file->getPathname());
-                if (strpos($abs, '/.git/') !== false || strpos($abs, '/node_modules/') !== false) { continue; }
-                if (strtolower(pathinfo($abs, PATHINFO_EXTENSION)) !== 'mjs') { continue; }
+                if (strpos($abs, '/.git/') !== false || strpos($abs, '/node_modules/') !== false) {
+                    continue;
+                }
+                if (strtolower(pathinfo($abs, PATHINFO_EXTENSION)) !== 'mjs') {
+                    continue;
+                }
                 $rel = ltrim(substr($abs, strlen($dir)), '/');
                 $meta = self::extract_meta_from_node($abs);
                 $out[] = ['path' => str_replace('\\', '/', $rel), 'meta' => $meta];
@@ -296,16 +321,24 @@ if (!class_exists('YOLANDI_Rest')) {
             );
             foreach ($it as $file) {
                 /** @var SplFileInfo $file */
-                if (!$file->isFile()) { continue; }
+                if (!$file->isFile()) {
+                    continue;
+                }
                 $abs = wp_normalize_path($file->getPathname());
-                if (strpos($abs, '/.git/') !== false || strpos($abs, '/node_modules/') !== false) { continue; }
-                if (strtolower(pathinfo($abs, PATHINFO_EXTENSION)) !== 'mjs') { continue; }
+                if (strpos($abs, '/.git/') !== false || strpos($abs, '/node_modules/') !== false) {
+                    continue;
+                }
+                if (strtolower(pathinfo($abs, PATHINFO_EXTENSION)) !== 'mjs') {
+                    continue;
+                }
                 $rel = ltrim(substr($abs, strlen($dir)), '/');
                 $pairs[] = [$abs, str_replace('\\', '/', $rel)];
             }
-            usort($pairs, static function ($a, $b) { return strcmp($a[1], $b[1]); });
+            usort($pairs, static function ($a, $b) {
+                return strcmp($a[1], $b[1]); });
 
-            $etag = self::build_etag(array_map(static function ($p) { return $p[0]; }, $pairs));
+            $etag = self::build_etag(array_map(static function ($p) {
+                return $p[0]; }, $pairs));
 
             $ifNone = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim((string) $_SERVER['HTTP_IF_NONE_MATCH']) : '';
             if ($ifNone !== '' && $ifNone === $etag) {
