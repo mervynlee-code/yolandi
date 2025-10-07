@@ -38,6 +38,9 @@ export default function GraphApp() {
   const [runnerCmdPS, setRunnerCmdPS] = useState("");
   const [runnerCmdSH, setRunnerCmdSH] = useState("");
 
+  // Zoom state (only for display; actions call Canvas API)
+  const [zoomPct, setZoomPct] = useState(100);
+
   // Refs & logging
   const canvasApiRef = useRef(null);
   const log = logLineFactory("#ystudio-terminal pre");
@@ -46,6 +49,7 @@ export default function GraphApp() {
   const prevActiveTabRef = useRef("w1");
 
   // Per-tab state (JSON + server path/name)
+  // { [tabId]: { data: object|null, path: string|null, name: string|null } }
   const tabStateRef = useRef(Object.create(null));
 
   useEffect(() => { ensureFA(); }, []);
@@ -105,7 +109,7 @@ export default function GraphApp() {
     console.warn = (...a) => { log(stringify(a), "WARN"); orig.warn(...a); };
     console.error = (...a) => { log(stringify(a), "ERROR"); orig.error(...a); };
     return () => { console.log = orig.log; console.warn = orig.warn; console.error = orig.error; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Wire global actions so Menubar (or other UI) can invoke Save / Save As / Node drop
@@ -118,8 +122,8 @@ export default function GraphApp() {
       if (auth.locked) { setShowAuth(true); return; }
       canvasApiRef.current?.addNodeByMeta(meta, pos);
     };
-    window.YOLANDI.actions.onFileSave = onFileSave;
-    window.YOLANDI.actions.onFileSaveAs = onFileSaveAs;
+    window.YOLANDI.actions.onFileSave = onFileSave;       // ⬅️ NEW
+    window.YOLANDI.actions.onFileSaveAs = onFileSaveAs;   // ⬅️ NEW
     window.YOLANDI.devBypass = () => {
       document.cookie = "yolandi_bypass=1; max-age=86400; path=/";
       setAuth(a => ({ ...a, bypass: true, locked: false }));
@@ -138,6 +142,18 @@ export default function GraphApp() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+
+  // Keep zoom display in sync (poll Canvas API if exposed)
+  useEffect(() => {
+    let t = null;
+    const tick = () => {
+      const z = canvasApiRef.current?.getZoom?.();
+      if (typeof z === "number" && isFinite(z)) setZoomPct(Math.round(z * 100));
+      t = setTimeout(tick, 400);
+    };
+    tick();
+    return () => t && clearTimeout(t);
+  }, []);
 
   // Workflow helpers
   function exportWorkflow() {
@@ -163,7 +179,7 @@ export default function GraphApp() {
     prevActiveTabRef.current = activeTabId;
   }, [activeTabId]);
 
-  // Mark tab dirty if Canvas emits change/dirty events
+  // Mark tab dirty if Canvas emits change/dirty events (support several shapes)
   useEffect(() => {
     const api = canvasApiRef.current;
     const markDirty = () => setTabs(ts => ts.map(t => t.id === activeTabId ? { ...t, dirty: true } : t));
@@ -198,19 +214,27 @@ export default function GraphApp() {
 
   // === File System API (server) ===
   function buildRestUrl(route, params) {
+    // route: 'yolandi/v1/fs/ls' or '/yolandi/v1/fs/ls'
     const clean = String(route).replace(/^\/+/, '');
-    let root = (window?.wpApiSettings?.root || '').toString();
+    let root = (window?.wpApiSettings?.root || '').toString(); // WP often exposes absolute REST root here
+
     let u;
     if (root && /^https?:\/\//i.test(root)) {
+      // Absolute root provided by WP (best case)
       u = new URL(root.replace(/\/+$/, '/') + clean);
     } else {
+      // Fallback: same origin + /wp-json/
       u = new URL('/wp-json/' + clean, window.location.origin);
     }
     if (params) {
-      for (const [k, v] of Object.entries(params)) if (v != null) u.searchParams.set(k, v);
+      for (const [k, v] of Object.entries(params)) {
+        if (v != null) u.searchParams.set(k, v);
+      }
     }
     return u.toString();
   }
+
+  // Replace your fsLs with this
   async function fsLs(path = null) {
     const url = buildRestUrl('yolandi/v1/fs/ls', path ? { path } : undefined);
     const res = await fetch(url, { credentials: 'include' });
@@ -220,6 +244,8 @@ export default function GraphApp() {
     }
     return res.json();
   }
+
+  // Replace your fsSave with this
   async function fsSave({ path, name, json }) {
     const url = buildRestUrl('yolandi/v1/fs/save');
     const res = await fetch(url, {
@@ -239,8 +265,12 @@ export default function GraphApp() {
   async function onFileSave() {
     const jsonObj = exportWorkflow();
     const jsonTxt = JSON.stringify(jsonObj, null, 2);
+
+    // Use last path/name if present
+    const t = tabs.find(x => x.id === activeTabId);
     const state = tabStateRef.current[activeTabId] || {};
-    if (!state.path || !state.name) return onFileSaveAs();
+    if (!state.path || !state.name) return onFileSaveAs(); // first time → Save As
+
     try {
       await fsSave({ path: state.path, name: state.name, json: jsonTxt });
       setTabs(ts => ts.map(x => x.id === activeTabId ? { ...x, dirty: false } : x));
@@ -250,14 +280,18 @@ export default function GraphApp() {
       alert("Save failed: " + e.message);
     }
   }
+
   function onFileSaveAs() {
     const jsonTxt = JSON.stringify(exportWorkflow(), null, 2);
     setFileModal({ open: true, json: jsonTxt });
   }
+
   async function onConfirmSaveAs({ dirPath, filename }) {
     try {
       await fsSave({ path: dirPath, name: filename, json: fileModal.json });
+      // remember for this tab
       tabStateRef.current[activeTabId] = { ...(tabStateRef.current[activeTabId] || {}), path: dirPath, name: filename };
+      // reflect in title if user saved a new name
       setTabs(ts => ts.map(x => x.id === activeTabId ? { ...x, title: filename.replace(/\.json$/i, ""), dirty: false } : x));
       setFileModal({ open: false, json: null });
       log(`Saved: ${dirPath}/${filename}`, "INFO");
@@ -294,6 +328,11 @@ export default function GraphApp() {
     e.target.value = "";
   }
 
+  // Zoom actions (call Canvas API if available)
+  function zoomIn() { canvasApiRef.current?.zoomIn?.(); }
+  function zoomOut() { canvasApiRef.current?.zoomOut?.(); }
+  function zoomFit() { canvasApiRef.current?.zoomFit?.(); }
+
   return (
     <div id="ystudio" data-palette={paletteOpen ? "open" : "closed"}>
       <input id="ystudio-import" type="file" accept="application/json" onChange={onImportChange} style={{ display: "none" }} />
@@ -329,13 +368,16 @@ export default function GraphApp() {
                   className="close"
                   onClick={(e) => {
                     e.stopPropagation();
+                    // persist current before closing if it's the active tab
                     if (t.id === activeTabId) {
                       const json = exportWorkflow();
                       tabStateRef.current[t.id] = { ...(tabStateRef.current[t.id] || {}), data: json };
                     }
                     setTabs((x) => x.filter((y) => y.id !== t.id));
+                    // also drop its cached state
                     const state = tabStateRef.current;
                     if (state[t.id]) delete state[t.id];
+                    // if we removed the last one, create a new blank tab
                     setTimeout(() => {
                       if (!document.querySelector(".tabs .tab")) {
                         const id = "w" + Math.random().toString(36).slice(2, 7);
@@ -368,7 +410,15 @@ export default function GraphApp() {
           <div id="ystudio-editor-host" style={{ position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             <div className="canvas-wrap" style={{ position: "relative", flex: "1 1 auto", minHeight: 0 }}>
               <NodeCanvas registerApi={(api) => (canvasApiRef.current = api)} />
-              {/* ⬅️ Removed the old zoom overlay toolbar from here */}
+              {/* Zoom controls — top-right */}
+              <div style={{
+                position: "absolute", top: 10, right: 10, display: "flex", gap: 8, zIndex: 20
+              }}>
+                <button className="btn" title="Zoom Out" onClick={zoomOut}><i className="fa fa-magnifying-glass-minus" /></button>
+                <div className="btn" title="Zoom">{zoomPct}%</div>
+                <button className="btn" title="Zoom In" onClick={zoomIn}><i className="fa fa-magnifying-glass-plus" /></button>
+                <button className="btn" title="Fit" onClick={zoomFit}><i className="fa fa-compress" /></button>
+              </div>
             </div>
 
             <RunnerPanel
