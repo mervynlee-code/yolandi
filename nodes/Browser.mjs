@@ -1,93 +1,130 @@
-// nodes/puppeteer/Browser.mjs
-// Minimal, safe handler for graph node type: "Puppeteer.Browser"
+// /wp-content/plugins/yolandi/nodes/puppeteer/Browser.mjs
+import puppeteer from "puppeteer";
+import { mergeCtx, toArgv } from "../_shared/helpers.mjs";
 
 export const meta = {
   type: "Puppeteer.Browser",
-  // optional: declare outputs if your graph uses them by name
-  // outputs: [{ id: "o0", name: "out" }],
+  title: "Puppeteer: Browser",
+  category: "Puppeteer",
+  version: 1,
+  props: {
+    headless:         { type: "checkbox", default: true },
+    engine:           { type: "select",   default: "chrome", options: ["chrome", "chromium", "firefox"] },
+    executablePath:   { type: "string",   default: "" },
+    userDataDir:      { type: "string",   default: "" },
+    cliArgs:          { type: "textarea", default: "" },
+    defaultViewport:  { type: "string",   default: "1280x800" },
+    incognito:        { type: "checkbox", default: false },
+    userAgent:        { type: "string",   default: "" },
+    timeoutMs:        { type: "number",   default: 60000 }
+  }
 };
 
-function parseViewport(str) {
-  if (!str) return undefined;
-  const m = String(str).match(/^\s*(\d+)\s*x\s*(\d+)\s*$/i);
-  if (!m) return undefined;
-  return { width: Number(m[1]), height: Number(m[2]) };
+export function defineEditorNode({ Baklava }) {
+  return new Baklava.NodeBuilder(meta.type)
+    .setName(meta.title)
+    .addInputInterface("in")
+    .addInputInterface("Proxy")
+    .addOutputInterface("out")
+    .addOption("headless",        "CheckboxOption", true)
+    .addOption("engine",          "SelectOption",   "chrome", ["chrome", "chromium", "firefox"])
+    .addOption("executablePath",  "TextOption",     "")
+    .addOption("userDataDir",     "TextOption",     "")
+    .addOption("cliArgs",         "TextAreaOption", "")
+    .addOption("defaultViewport", "TextOption",     "1280x800")
+    .addOption("incognito",       "CheckboxOption", false)
+    .addOption("userAgent",       "TextOption",     "")
+    .addOption("timeoutMs",       "NumberOption",   60000)
+    .build();
 }
 
-function splitArgs(s) {
-  if (!s) return [];
-  // very simple splitter; if you need quotes, swap for a real shell parser
-  return String(s).trim().split(/\s+/).filter(Boolean);
-}
+/**
+ * Accepts either (io, ctx) or (ctx, options).
+ * Mutates the real shared ctx (ctx.browser / ctx.context), and returns:
+ *  - io (unchanged) if called with (io, ctx)
+ *  - merged ctx if called with (ctx, options)
+ */
+export async function run(arg1 = {}, arg2 = {}) {
+  // Detect calling convention
+  const calledWithIO = !!(arg1 && (arg1.fields || arg1.packet));
+  const io       = calledWithIO ? arg1         : { packet: {}, fields: arg2 || {} };
+  const ctx      = calledWithIO ? (arg2 || {}) : (arg1 || {});
+  const options  = io.fields ? io.fields : (arg2 || {});
 
-export async function run(ctx) {
-  const { fields = {}, bag, log } = ctx;
+  // --- Viewport ---
+  const [w, h] = String(options.defaultViewport || "1280x800")
+    .split("x")
+    .map(n => parseInt(n, 10) || 0);
 
-  // Try puppeteer or puppeteer-core
-  let puppeteer = null;
-  try {
-    ({ default: puppeteer } = await import("puppeteer"));
-  } catch {
-    try {
-      ({ default: puppeteer } = await import("puppeteer-core"));
-    } catch {}
+  // --- CLI args + Proxy ---
+  const args = toArgv(options.cliArgs);
+  const proxy = ctx.proxy || options.Proxy || null;
+  if (proxy && proxy.url) {
+    args.push(`--proxy-server=${proxy.url}`);
+    if (proxy.bypass) args.push(`--proxy-bypass-list=${proxy.bypass}`);
   }
 
-  if (!puppeteer) {
-    await log?.("warn", "Puppeteer not installed; node will no-op");
-    return {
-      packet: {
-        puppeteer: { launched: false, reason: "missing_dependency" },
-      },
-    };
-  }
-
-  const viewport = parseViewport(fields.defaultViewport);
-  const args = splitArgs(fields.cliArgs);
-
+  // --- Launch options ---
   const launchOpts = {
-    headless: !!fields.headless, // set true/false as-is from fields
-    args: args.length ? args : undefined,
-    executablePath: fields.executablePath || undefined,
-    userDataDir: fields.userDataDir || undefined,
-    defaultViewport: viewport,
+    headless: !!options.headless,
+    product: options.engine || "chrome",
+    ignoreHTTPSErrors: true,
+    args,
+    defaultViewport: { width: w || 1280, height: h || 800 },
+    timeout: options.timeoutMs ?? 60000
   };
+  if (options.executablePath) launchOpts.executablePath = options.executablePath;
+  if (options.userDataDir)    launchOpts.userDataDir    = options.userDataDir;
 
-  // Friendly log of launch options (without leaking long args)
-  await log?.("info", "Launching Puppeteer", {
-    headless: launchOpts.headless,
-    viewport,
-    hasUserDataDir: !!launchOpts.userDataDir,
-    argsCount: args.length,
-  });
-
-  const browser = await puppeteer.launch(launchOpts);
-  let context = null;
-  let page = null;
-
-  if (fields.incognito) {
-    context = await browser.createIncognitoBrowserContext();
-    page = await context.newPage();
-  } else {
-    page = await browser.newPage();
+  // --- Reuse if connected; else launch ---
+  let browser = ctx.browser;
+  try {
+    if (!browser || typeof browser.isConnected !== "function" || !browser.isConnected()) {
+      browser = await puppeteer.launch(launchOpts);
+    }
+  } catch (e) {
+    // Some puppeteer products barf on defaultViewport; retry without it
+    const { defaultViewport, ...rest } = launchOpts;
+    browser = await puppeteer.launch(rest);
   }
 
-  if (fields.userAgent) await page.setUserAgent(String(fields.userAgent));
-  if (fields.timeoutMs) page.setDefaultTimeout(Number(fields.timeoutMs));
+  // --- Context (default vs incognito) ---
+  let context = browser.defaultBrowserContext();
+  if (options.incognito) {
+    context = await browser.createIncognitoBrowserContext();
+  }
 
-  // Stash in shared bag for downstream nodes + gracefulCleanup()
-  bag.browser = browser;
-  bag.context = context;
-  bag.page = page;
+  // --- Mutate the REAL shared ctx (this is what NewPage reads) ---
+  ctx.browser = browser;
+  ctx.context = context;
+  ctx.proxy   = proxy || ctx.proxy || null;
 
-  return {
-    packet: {
-      puppeteer: {
-        launched: true,
-        pid: browser.process ? browser.process()?.pid : undefined,
-        wsEndpoint: browser.wsEndpoint ? browser.wsEndpoint() : undefined,
-        incognito: !!fields.incognito,
-      },
-    },
-  };
+  ctx.puppeteer = ctx.puppeteer || {};
+  ctx.puppeteer.browser = browser;
+  ctx.puppeteer.context = context;
+
+  if (options.userAgent) {
+    ctx.userAgent = String(options.userAgent).trim();
+    ctx.puppeteer.userAgent = ctx.userAgent;
+  }
+
+  // --- One-time cleanup hook for the job ---
+  if (typeof ctx.onCleanup === "function" && !ctx.__puppeteerCleanup) {
+    ctx.__puppeteerCleanup = true;
+    ctx.onCleanup(async () => {
+      try { await ctx.puppeteer?.context?.close?.(); } catch {}
+      try { await ctx.puppeteer?.browser?.close?.(); } catch {}
+      ctx.browser = null;
+      ctx.context = null;
+      if (ctx.puppeteer) {
+        ctx.puppeteer.browser = null;
+        ctx.puppeteer.context = null;
+      }
+    });
+  }
+
+  // --- Return shape that matches how we were called ---
+  return calledWithIO
+    ? io // runner style: run(io, ctx) → return io
+    : mergeCtx(ctx, { browser, context, proxy: ctx.proxy, puppeteer: ctx.puppeteer, userAgent: ctx.userAgent });
 }

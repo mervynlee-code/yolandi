@@ -62,7 +62,7 @@ function summarizePayload(p = {}) {
   try {
     const { wf } = resolveWorkflow({ payload: p }, true);
     if (wf) wfHint = { nodes: wf.nodes?.length || 0, links: (wf.links || []).length || 0 };
-  } catch { }
+  } catch {}
   return { keys, mode, ...hints, wfHint };
 }
 
@@ -76,7 +76,6 @@ async function lease(runnerId, leaseSeconds = 90) {
   if (!r.ok) throw new Error(`lease ${r.status}`);
   const ct = r.headers.get("content-type") || "";
   const json = ct.includes("json") ? await r.json().catch(() => null) : null;
-  console.log(r)
   if (DBG) dlog(`[lease] ${r.status} ${r.statusText}`, json ? `(job id ${json?.id})` : "(no json)");
   return json;
 }
@@ -110,7 +109,7 @@ async function report(id, runnerId, status, payload = {}) {
    Pause helpers
    ============================================================================= */
 async function waitWhilePaused(jobId, runnerId) {
-  for (; ;) {
+  for (;;) {
     const hb = await heartbeat(jobId, runnerId, 90);
     if (hb?.control === "resume" || !hb?.control) break;
     await sleep(10_000);
@@ -168,8 +167,8 @@ async function findByCanonicalPaths(type) {
     path.join(NODES_DIR, dir, `${slug}.mjs`),
     path.join(NODES_DIR, dir, `${rest.slice(-1)[0]}.mjs`),
     path.join(NODES_DIR, dir, `${rest.slice(-1)[0].toLowerCase()}.mjs`),
-    path.join(NODES_DIR, dir, nameJoinSlash + ".mjs"),
-    path.join(NODES_DIR, dir, nameJoinSlashLower + ".mjs"),
+    path.join(NODES_DIR, dir, `${nameJoinSlash}.mjs`),
+    path.join(NODES_DIR, dir, `${nameJoinSlashLower}.mjs`),
   ];
 
   for (const p of candidates) {
@@ -285,7 +284,7 @@ function resolveWorkflow(job, silent = false) {
 }
 
 /* =============================================================================
-   Graph executor
+   Graph executor (single shared context)
    ============================================================================= */
 function buildGraph(wf) {
   const nodes = new Map();
@@ -319,7 +318,8 @@ function mergePackets(...objs) {
   return base;
 }
 
-async function execWorkflow(job, runnerId) {
+async function execWorkflow(job, runnerId, sharedCtx) {
+  // Resolve the workflow from the job
   const { wf, source } = resolveWorkflow(job);
   if (!wf || !Array.isArray(wf.nodes)) {
     const summary = summarizePayload(job.payload || {});
@@ -335,39 +335,37 @@ async function execWorkflow(job, runnerId) {
     dlog(`[graph] src=${source} nodes=${wf.nodes?.length || 0} links=${wf.links?.length || 0}`, peek);
   }
 
+  // Mutate shared ctx once so every node sees the same reference
   const payload = job.payload || {};
-  const env = Object.assign({}, process.env, payload.env || {});
-  const settings = payload.settings || {};
-  const bag = {};
+  sharedCtx.job = job;
+  sharedCtx.runnerId = runnerId;
+  sharedCtx.env = Object.assign({}, process.env, payload.env || {});
+  sharedCtx.settings = payload.settings || {};
+  sharedCtx.bag = sharedCtx.bag || {};
 
-  const inPackets = new Map();
-  const inByPort = new Map();
-
-  const ctxBase = {
-    job,
-    runnerId,
-    env,
-    settings,
-    bag,
-    waitWhilePaused: () => waitWhilePaused(job.id, runnerId),
-    checkPause: () => checkPause(job.id, runnerId),
-    heartbeat: (leaseSeconds = 90) => heartbeat(job.id, runnerId, leaseSeconds),
-    report: (status, extra = {}) => report(job.id, runnerId, status, extra),
-    log: async (level, message, extra = {}) =>
-      report(job.id, runnerId, "progress", { level, message, ...extra }),
-  };
+  // convenience helpers bound to this job
+  sharedCtx.waitWhilePaused = () => waitWhilePaused(job.id, runnerId);
+  sharedCtx.checkPause      = () => checkPause(job.id, runnerId);
+  sharedCtx.heartbeat       = (leaseSeconds = 90) => heartbeat(job.id, runnerId, leaseSeconds);
+  sharedCtx.report          = (status, extra = {}) => report(job.id, runnerId, status, extra);
+  sharedCtx.log             = async (level, message, extra = {}) => report(job.id, runnerId, "progress", { level, message, ...extra });
 
   const { nodes, incoming, outgoing, indegree } = buildGraph(wf);
 
+  // Topo queue
   const q = [];
+  const inPackets = new Map();
+  const inByPort = new Map();
+  const receivedFrom = new Map();
+
   for (const [nid, deg] of indegree.entries()) {
     if (deg === 0) q.push(nid);
     inPackets.set(nid, []);
     inByPort.set(nid, Object.create(null));
   }
-
-  const receivedFrom = new Map();
   for (const nid of nodes.keys()) receivedFrom.set(nid, 0);
+
+  let lastPacket = {};
 
   while (q.length) {
     const nid = q.shift();
@@ -375,9 +373,9 @@ async function execWorkflow(job, runnerId) {
     const inboundPackets = inPackets.get(nid) || [];
     const inboundByPort = inByPort.get(nid) || {};
 
-    await ctxBase.checkPause();
+    await sharedCtx.checkPause();
 
-    await ctxBase.report("progress", {
+    await sharedCtx.report("progress", {
       artifacts: {
         event: "node_start",
         nodeId: nid,
@@ -390,7 +388,7 @@ async function execWorkflow(job, runnerId) {
     try {
       mod = await resolveHandler(node.type);
     } catch (e) {
-      await ctxBase.report("failed", {
+      await sharedCtx.report("failed", {
         event: "handler_missing",
         nodeId: nid,
         nodeType: node.type,
@@ -401,27 +399,27 @@ async function execWorkflow(job, runnerId) {
 
     if (typeof mod?.run !== "function") {
       const msg = `Handler for ${node.type} does not export a 'run' function`;
-      await ctxBase.report("failed", { event: "handler_invalid", nodeId: nid, nodeType: node.type, error: { message: msg } });
+      await sharedCtx.report("failed", { event: "handler_invalid", nodeId: nid, nodeType: node.type, error: { message: msg } });
       throw new Error(msg);
     }
 
-    const mergedPacket = mergePackets(...inboundPackets);
-    const nodeCtx = {
-      ...ctxBase,
-      node,
-      fields: node.fields || {},
-      packet: mergedPacket,
-      inPackets: inboundPackets,
-      inByPort: inboundByPort,
-    };
-
+    const mergedIn = mergePackets(...inboundPackets);
     let result = null;
+
     try {
-      if (TRACE) tlog(`[node] ${node.type} (${node.title || nid}) in:`, redactDeep({ packet: mergedPacket, fields: node.fields || {} }));
-      result = await mod.run(nodeCtx);
+      if (TRACE) tlog(`[node] ${node.type} (${node.title || nid}) in:`, redactDeep({ packet: mergedIn, fields: node.fields || {} }));
+
+      // Preferred calling convention
+      try {
+        result = await mod.run({ packet: mergedIn, fields: node.fields || {} }, sharedCtx);
+      } catch (ePrimary) {
+        // Fallback for legacy nodes: run(ctx, fields)
+        result = await mod.run(sharedCtx, node.fields || {});
+      }
+
       if (TRACE) tlog(`[node] ${node.type} out:`, redactDeep(result));
     } catch (err) {
-      await ctxBase.report("failed", {
+      await sharedCtx.report("failed", {
         event: "node_error",
         nodeId: nid,
         nodeType: node.type,
@@ -431,7 +429,8 @@ async function execWorkflow(job, runnerId) {
     }
 
     const packetDelta = result?.packet ?? result?.packetDelta ?? {};
-    const mergedOut = mergePackets(mergedPacket, packetDelta);
+    const mergedOut = mergePackets(mergedIn, packetDelta);
+    lastPacket = mergedOut;
 
     const outs = outgoing.get(nid) || [];
     const outputsMap = (result && typeof result === "object" && result.outputs) || null;
@@ -448,7 +447,7 @@ async function execWorkflow(job, runnerId) {
         try {
           const name = node.outputs?.find((o) => o.id === fromPid)?.name;
           byName = name ? outputsMap[name] : null;
-        } catch { }
+        } catch {}
         outPacket = byId ?? byName ?? mergedOut;
       }
 
@@ -462,7 +461,7 @@ async function execWorkflow(job, runnerId) {
       if (receivedFrom.get(toId) === need) q.push(toId);
     }
 
-    await ctxBase.report("progress", {
+    await sharedCtx.report("progress", {
       artifacts: {
         event: "node_done",
         nodeId: nid,
@@ -472,15 +471,19 @@ async function execWorkflow(job, runnerId) {
     });
   }
 
-  await gracefulCleanup(bag);
+  // Best-effort cleanup (nodes can also register sharedCtx.onCleanup)
+  await gracefulCleanup(sharedCtx.bag, sharedCtx);
+
+  return { packet: lastPacket, ctx: sharedCtx };
 }
 
-async function gracefulCleanup(bag) {
+async function gracefulCleanup(bag, sharedCtx) {
   try {
-    if (bag.page && typeof bag.page.close === "function") await bag.page.close().catch(() => { });
-    if (bag.context && typeof bag.context.close === "function") await bag.context.close().catch(() => { });
-    if (bag.browser && typeof bag.browser.close === "function") await bag.browser.close().catch(() => { });
-  } catch { }
+    if (bag?.page && typeof bag.page.close === "function") await bag.page.close().catch(() => {});
+    if (bag?.context && typeof bag.context.close === "function") await bag.context.close().catch(() => {});
+    if (bag?.browser && typeof bag.browser.close === "function") await bag.browser.close().catch(() => {});
+    await runCleanup(sharedCtx);
+  } catch {}
 }
 
 /* =============================================================================
@@ -533,11 +536,36 @@ async function execModuleOrCode(job, runnerId) {
 }
 
 /* =============================================================================
+   Shared ctx factory + cleanup
+   ============================================================================= */
+function createSharedCtx(job) {
+  const cleanup = [];
+  return {
+    job,
+    jobId: job?.id,
+    startedAt: Date.now(),
+    env: process.env,
+    cleanup,
+    onCleanup(fn) { if (typeof fn === "function") cleanup.push(fn); }
+  };
+}
+
+async function runCleanup(ctx) {
+  if (!ctx?.cleanup?.length) return;
+  // LIFO is safer for dependent cleanups
+  for (let i = ctx.cleanup.length - 1; i >= 0; i--) {
+    const fn = ctx.cleanup[i];
+    try { await fn?.(); } catch {}
+  }
+  ctx.cleanup.length = 0;
+}
+
+/* =============================================================================
    Main loop
    ============================================================================= */
 async function runJob(job, runnerId) {
   const id = job.id;
-  console.log(`Running #${id} (${job.script_slug}@${job.script_version})`);
+  dlog(`Running #${id} (${job.script_slug}@${job.script_version})`);
 
   const hbLoop = setInterval(() => {
     heartbeat(id, runnerId, 90)
@@ -546,6 +574,8 @@ async function runJob(job, runnerId) {
   }, 15_000);
 
   const startedAt = Date.now();
+  const sharedCtx = createSharedCtx(job);
+
   try {
     const first = await heartbeat(id, runnerId, 90);
     if (first?.control === "pause") {
@@ -574,8 +604,11 @@ async function runJob(job, runnerId) {
       dlog(`[workflow] using ${detected.source} (nodes=${detected.wf.nodes?.length || 0}, links=${detected.wf.links?.length || 0})`);
     }
 
-    if (mode === "workflow") await execWorkflow({ ...job, payload: job.payload || {} }, runnerId);
-    else await execModuleOrCode(job, runnerId);
+    if (mode === "workflow") {
+      await execWorkflow(job, runnerId, sharedCtx);
+    } else {
+      await execModuleOrCode(job, runnerId);
+    }
 
     await report(id, runnerId, "succeeded", { run_ms: Date.now() - startedAt });
   } catch (err) {
@@ -583,6 +616,7 @@ async function runJob(job, runnerId) {
     await report(id, runnerId, "failed", { error: { message: String(err?.message || err) } });
   } finally {
     clearInterval(hbLoop);
+    await runCleanup(sharedCtx);
   }
 }
 
@@ -595,7 +629,7 @@ async function main() {
   console.log(`[YOLANDI Runner] nodes dir = ${NODES_DIR}`);
   let idle = 0;
 
-  for (; ;) {
+  for (;;) {
     const job = await lease(runnerId).catch((e) => (console.error("lease err", e), null));
     if (!job) {
       idle++;
@@ -604,7 +638,6 @@ async function main() {
       continue;
     }
     idle = 0;
-    console.log(job)
     await runJob(job, runnerId);
   }
 }
