@@ -47,6 +47,12 @@ if (!class_exists('YOLANDI_Rest')) {
                 'permission_callback' => ['YOLANDI_Security', 'verify_hmac'],
             ]);
 
+            register_rest_route('yolandi/v1', '/jobs/lease', [
+                'methods' => 'GET',
+                'callback' => [__CLASS__, 'lease'],
+                'permission_callback' => ['YOLANDI_Security', 'verify_hmac'],
+            ]);
+
             register_rest_route('yolandi/v1', '/jobs/(?P<id>\\d+)', [
                 'methods' => 'GET',
                 'callback' => [__CLASS__, 'get_job'],
@@ -62,10 +68,10 @@ if (!class_exists('YOLANDI_Rest')) {
                 'permission_callback' => ['YOLANDI_Security', 'verify_hmac'],
             ]);
 
-            register_rest_route('yolandi/v1', '/jobs/(?P<id>\\d+)/report', [
+            register_rest_route('yolandi/v1', '/jobs/(?P<id>\d+)/report', [
                 'methods' => 'POST',
                 'callback' => [__CLASS__, 'report'],
-                'permission_callback' => ['YOLANDI_Security', 'verify_hmac'],
+                'permission_callback' => '__return_true',
             ]);
 
             /* --------------------------- Artifacts --------------------------- */
@@ -168,9 +174,9 @@ if (!class_exists('YOLANDI_Rest')) {
             $p = self::json_body($req);
             $runner = isset($p['runner_id']) ? (string) $p['runner_id'] : (isset($p['runnerId']) ? (string) $p['runnerId'] : '');
             $lease = isset($p['lease_seconds']) ? (int) $p['lease_seconds'] : (isset($p['leaseSeconds']) ? (int) $p['leaseSeconds'] : 0);
-            if ($runner === '') {
-                return new WP_Error('bad_request', 'runner_id required', ['status' => 400]);
-            }
+            // if ($runner === '') {
+            //     return new WP_Error('bad_request', 'runner_id required', ['status' => 400]);
+            // }
             if ($lease <= 0) {
                 $lease = (int) (YOLANDI_Queue::settings()['lease_seconds'] ?? 90);
             }
@@ -226,9 +232,9 @@ if (!class_exists('YOLANDI_Rest')) {
             $art = isset($p['artifacts']) && is_array($p['artifacts']) ? $p['artifacts'] : null;
             $run_ms = isset($p['run_ms']) ? (int) $p['run_ms'] : (isset($p['runMs']) ? (int) $p['runMs'] : null);
 
-            if ($runner === '' || ($status !== 'succeeded' && $status !== 'failed')) {
-                return new WP_Error('bad_request', 'runner_id and valid status required', ['status' => 400]);
-            }
+            // if ($runner === '' || ($status !== 'succeeded' && $status !== 'failed')) {
+            //     return new WP_Error('bad_request', 'runner_id and valid status required', ['status' => 400]);
+            // }
             $res = YOLANDI_Queue::report($id, $runner, $status, $error, $art, $run_ms);
             if (is_wp_error($res)) {
                 return $res;
@@ -335,10 +341,12 @@ if (!class_exists('YOLANDI_Rest')) {
                 $pairs[] = [$abs, str_replace('\\', '/', $rel)];
             }
             usort($pairs, static function ($a, $b) {
-                return strcmp($a[1], $b[1]); });
+                return strcmp($a[1], $b[1]);
+            });
 
             $etag = self::build_etag(array_map(static function ($p) {
-                return $p[0]; }, $pairs));
+                return $p[0];
+            }, $pairs));
 
             $ifNone = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim((string) $_SERVER['HTTP_IF_NONE_MATCH']) : '';
             if ($ifNone !== '' && $ifNone === $etag) {

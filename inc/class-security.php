@@ -54,7 +54,7 @@ if (!class_exists('YOLANDI_Security')) {
         'caps'   => is_user_logged_in() ? array_keys( wp_get_current_user()->allcaps ?? [] ) : [],
         'hdrs'   => self::safe_headers(),
       ] + $extra;
-      var_dump('[YOLANDI_AUTH] ' . $msg . ' :: ' . wp_json_encode($bits));
+      // var_dump('[YOLANDI_AUTH] ' . $msg . ' :: ' . wp_json_encode($bits));
     }
 
     private static function safe_headers() : array {
@@ -79,7 +79,7 @@ if (!class_exists('YOLANDI_Security')) {
 
       // 1) Accept admin nonce
       $nonce = $req->get_header('X-WP-Nonce');
-      var_dump($nonce);
+      // var_dump($nonce);
       if ($nonce) {
         $ok_nonce = wp_verify_nonce($nonce, 'wp_rest');
         self::dbg('checked nonce', $req, ['ok_nonce' => (bool)$ok_nonce]);

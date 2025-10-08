@@ -83,13 +83,6 @@ export default function NodeCanvas({ registerApi }) {
       onDragOver={(e)=>{ if(e.dataTransfer?.types?.includes("application/x-yolandi-node")){ e.preventDefault(); e.dataTransfer.dropEffect='copy'; } }}
       onDrop={(e)=>{ const dt=e.dataTransfer?.getData("application/x-yolandi-node"); if(!dt) return; e.preventDefault(); e.stopPropagation(); const meta=JSON.parse(dt); window.YOLANDI.actions.onNodeDrop?.(meta,{x:e.clientX,y:e.clientY}); }}>
 
-      <div className="yc-toolbar" style={{ position:"absolute", right:12, top:8, zIndex:20, display:"flex", gap:6, alignItems:"center" }}>
-        <button title="Pan" onClick={()=>setMode(m=>m==="pan"?"select":"pan")}><i className="fa fa-hand"/></button>
-        <span className="sep" />
-        <button title="Fit" onClick={fitToContent}><i className="fa fa-rectangle-list"/></button>
-        <span className="zoom"> {(view.k*100)|0}%</span>
-      </div>
-
       <div ref={contentRef} className="yc-content" style={{ position:"absolute", left:0, top:0, width:"100%", height:"100%", transformOrigin:"0 0", transform:`translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
         <svg className="yc-wires" width="20000" height="12000" style={{ position:"absolute", left:0, top:0, overflow:"visible", pointerEvents:"none", zIndex:0 }}>
           {wirePaths.map(p=> (<path key={p.id} d={p.d} className={p.id==="_wip"?"yc-wire wip":"yc-wire"} stroke={p.id==="_wip"?"rgba(96,165,250,.7)":"rgba(96,165,250,.95)"} strokeWidth={2} fill="none" style={{ vectorEffect:"non-scaling-stroke" }} />))}

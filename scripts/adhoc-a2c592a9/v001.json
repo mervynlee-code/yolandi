@@ -1,0 +1,35 @@
+{
+    "version": 1,
+    "view": {
+        "x": 0,
+        "y": 0,
+        "k": 1
+    },
+    "nodes": [
+        {
+            "id": "nwcdd1mz",
+            "title": "Take Screenshot",
+            "type": "Screenshot",
+            "x": 256,
+            "y": 245,
+            "w": 280,
+            "fields": {
+                "path": "${artifacts}/shot.png",
+                "fullPage": true
+            },
+            "inputs": [
+                {
+                    "id": "i0",
+                    "name": "in"
+                }
+            ],
+            "outputs": [
+                {
+                    "id": "o0",
+                    "name": "out"
+                }
+            ]
+        }
+    ],
+    "links": []
+}

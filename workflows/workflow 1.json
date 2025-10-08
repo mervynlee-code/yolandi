@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "view": {
+    "x": 196.4396300245249,
+    "y": 253.92070352266242,
+    "k": 0.9345180138666092
+  },
+  "nodes": [
+    {
+      "id": "njpdm15x",
+      "title": "Puppeteer: Browser",
+      "type": "Puppeteer.Browser",
+      "x": -146,
+      "y": 73,
+      "w": 280,
+      "fields": {
+        "headless": false,
+        "engine": "chrome",
+        "executablePath": "",
+        "userDataDir": "",
+        "cliArgs": "",
+        "defaultViewport": "1280x800",
+        "incognito": false,
+        "userAgent": "",
+        "timeoutMs": 60000
+      },
+      "inputs": [
+        {
+          "id": "i0",
+          "name": "in"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "o0",
+          "name": "out"
+        }
+      ]
+    },
+    {
+      "id": "nppks3q6",
+      "title": "Puppeteer: New Page",
+      "type": "Puppeteer.NewPage",
+      "x": 219,
+      "y": 44,
+      "w": 280,
+      "fields": {
+        "url": "about:blank",
+        "waitUntil": "domcontentloaded",
+        "waitFor": "",
+        "headersJson": ""
+      },
+      "inputs": [
+        {
+          "id": "i0",
+          "name": "in"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "o0",
+          "name": "out"
+        }
+      ]
+    },
+    {
+      "id": "nu1q2edv",
+      "title": "Puppeteer: Global Proxy",
+      "type": "Puppeteer.GlobalProxy",
+      "x": 587,
+      "y": -18,
+      "w": 280,
+      "fields": {
+        "protocol": "http",
+        "host": "",
+        "port": 8080,
+        "username": "",
+        "password": "",
+        "bypass": ""
+      },
+      "inputs": [
+        {
+          "id": "i0",
+          "name": "in"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "o0",
+          "name": "out"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "id": "lg6onl1r",
+      "from": {
+        "nid": "njpdm15x",
+        "pid": "o0"
+      },
+      "to": {
+        "nid": "nppks3q6",
+        "pid": "i0"
+      }
+    },
+    {
+      "id": "lt52zr96",
+      "from": {
+        "nid": "nppks3q6",
+        "pid": "o0"
+      },
+      "to": {
+        "nid": "nu1q2edv",
+        "pid": "i0"
+      }
+    }
+  ]
+}

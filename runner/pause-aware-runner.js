@@ -1,34 +1,86 @@
 // runner/pause-aware-runner.js
-import fetch from "node-fetch";                 // Node < 18: keep; Node >= 18: you can remove and use global fetch
+// Pause-aware job runner that supports workflow graphs coming from:
+// - payload.workflow / payload.workflow_json
+// - job.workflow / job.workflow_json
+// - payload.params / payload.params_json
+// - job.params / job.params_json
+// Accepts arrays as shorthand for { nodes: [...], links: [] }.
+// Adds strong debugging + handler resolution tracing.
+
+import fetch from "node-fetch"; // Node < 18; remove and use global fetch on Node >= 18
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import fs from "node:fs/promises";
 
 /* =============================================================================
-   Config
+   Config + Debug
    ============================================================================= */
-const BASE = process.env.YOLANDI_API; // e.g., https://yolandi.org/wp-json/yolandi/v1
-const H = { "Content-Type": "application/json" /* + your HMAC header(s) */ };
-
-// Where .mjs node handlers live (recursive)
+const BASE = process.env.YOLANDI_API; // e.g., https://yoursite.com/wp-json/yolandi/v1
+const H = { "Content-Type": "application/json" /* + your auth/HMAC headers if any */ };
 const NODES_DIR =
-  process.env.YOLANDI_NODES_DIR ||
-  path.resolve(process.cwd(), "nodes"); // default: /wp-content/plugins/yolandi/nodes per project notes
+  "C:/wnmp/nginx/www/yolandi.org/wp-content/plugins/yolandi/nodes" || process.env.YOLANDI_NODES_DIR ||
+  path.resolve(process.cwd(), "nodes"); // default per YOLANDI project notes
+
+const DBG = !!Number(process.env.YOLANDI_DEBUG || process.env.DEBUG || 0);
+const TRACE = !!Number(process.env.YOLANDI_TRACE || 0);
+
+const now = () => new Date().toISOString().replace("T", " ").replace("Z", "");
+const dlog = (...args) => DBG && console.log(`[${now()}]`, ...args);
+const tlog = (...args) => TRACE && console.log(`[${now()}][trace]`, ...args);
+
+/* =============================================================================
+   Helpers
+   ============================================================================= */
+function redactDeep(val) {
+  const SECRET_KEYS = /pass(word)?|token|secret|api[_-]?key|authorization|cookie|hmac|bearer/i;
+  if (val == null) return val;
+  if (typeof val === "string") return val.length > 4096 ? val.slice(0, 4096) + "…" : val;
+  if (Array.isArray(val)) return val.map(redactDeep);
+  if (typeof val === "object") {
+    const out = Array.isArray(val) ? [] : {};
+    for (const [k, v] of Object.entries(val)) {
+      out[k] = SECRET_KEYS.test(k) ? "***REDACTED***" : redactDeep(v);
+    }
+    return out;
+  }
+  return val;
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function summarizePayload(p = {}) {
+  const keys = Object.keys(p);
+  const mode = p.mode || (p.code ? "code" : "module");
+  const hints = {
+    hasWorkflow: !!p.workflow,
+    hasWorkflowJson: !!p.workflow_json,
+    hasParams: !!p.params,
+    hasParamsJson: !!p.params_json,
+    hasCode: !!p.code,
+    hasFile: !!p.file,
+  };
+  let wfHint = null;
+  try {
+    const { wf } = resolveWorkflow({ payload: p }, true);
+    if (wf) wfHint = { nodes: wf.nodes?.length || 0, links: (wf.links || []).length || 0 };
+  } catch { }
+  return { keys, mode, ...hints, wfHint };
+}
 
 /* =============================================================================
    REST helpers
    ============================================================================= */
 async function lease(runnerId, leaseSeconds = 90) {
-  const r = await fetch(`${BASE}/jobs/lease`, {
-    method: "POST",
-    headers: H,
-    body: JSON.stringify({ runner_id: runnerId, lease_seconds: leaseSeconds }),
-  });
-  console.log(r)
+  const body = JSON.stringify({ runner_id: runnerId, lease_seconds: leaseSeconds });
+  const r = await fetch(`${BASE}/jobs/lease`, { method: "POST", headers: H, body });
   if (r.status === 204) return null;
   if (!r.ok) throw new Error(`lease ${r.status}`);
-  return r.json();
+  const ct = r.headers.get("content-type") || "";
+  const json = ct.includes("json") ? await r.json().catch(() => null) : null;
+  console.log(r)
+  if (DBG) dlog(`[lease] ${r.status} ${r.statusText}`, json ? `(job id ${json?.id})` : "(no json)");
+  return json;
 }
+
 async function heartbeat(id, runnerId, leaseSeconds = 90) {
   const r = await fetch(`${BASE}/jobs/${id}/heartbeat`, {
     method: "POST",
@@ -37,25 +89,28 @@ async function heartbeat(id, runnerId, leaseSeconds = 90) {
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`heartbeat ${r.status}`);
-  return j; // may include { control: 'pause'|'resume' }
+  if (DBG && j?.control) dlog(`[heartbeat] job ${id} control=${j.control}`);
+  return j;
 }
+
 async function report(id, runnerId, status, payload = {}) {
-  const r = await fetch(`${BASE}/jobs/${id}/report`, {
+  const safe = redactDeep(payload);
+  if (DBG) dlog(`[report] job ${id} status=${status}`, safe);
+  const res = await fetch(`${BASE}/jobs/${id}/report`, {
     method: "POST",
     headers: H,
     body: JSON.stringify({ runner_id: runnerId, status, ...payload }),
   });
-  if (!r.ok) throw new Error(`report ${r.status}`);
-  return r.json().catch(() => ({}));
+  const text = await res.text().catch(() => "");
+  if (!res.ok) throw new Error(`report ${res.status}: ${text.slice(0, 200)}`);
+  try { return JSON.parse(text); } catch { return {}; }
 }
 
 /* =============================================================================
    Pause helpers
    ============================================================================= */
 async function waitWhilePaused(jobId, runnerId) {
-  // simple polling; server decides when to resume
-  // keep the lease alive by passing leaseSeconds in heartbeat
-  for (;;) {
+  for (; ;) {
     const hb = await heartbeat(jobId, runnerId, 90);
     if (hb?.control === "resume" || !hb?.control) break;
     await sleep(10_000);
@@ -64,68 +119,37 @@ async function waitWhilePaused(jobId, runnerId) {
 async function checkPause(jobId, runnerId) {
   const hb = await heartbeat(jobId, runnerId, 90);
   if (hb?.control === "pause") {
-    console.log(`Job #${jobId} pause requested; idling…`);
+    dlog(`Job #${jobId} pause requested; idling…`);
     await waitWhilePaused(jobId, runnerId);
-    console.log(`Job #${jobId} resumed.`);
+    dlog(`Job #${jobId} resumed.`);
   }
 }
 
 /* =============================================================================
-   FS utils
+   FS helpers for node discovery
    ============================================================================= */
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function fileExists(p) {
-  try {
-    await fs.stat(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
+async function fileExists(p) { try { await fs.stat(p); return true; } catch { return false; } }
 async function listMjsRecursive(dir, acc = []) {
   let entries = [];
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
-    return acc;
-  }
+  try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return acc; }
   for (const e of entries) {
     const abs = path.join(dir, e.name);
-    if (e.isDirectory()) {
-      await listMjsRecursive(abs, acc);
-    } else if (e.isFile() && e.name.endsWith(".mjs")) {
-      acc.push(abs);
-    }
+    if (e.isDirectory()) await listMjsRecursive(abs, acc);
+    else if (e.isFile() && e.name.endsWith(".mjs")) acc.push(abs);
   }
   return acc;
 }
 
 /* =============================================================================
-   Handler resolution (dot-notation → .mjs module with meta.type & run)
+   Handler resolution
    ============================================================================= */
-const handlerCache = new Map();      // type → module namespace
-const typeToPathCache = new Map();   // type → absolute path
+const handlerCache = new Map();
+const typeToPathCache = new Map();
 
 function toSlug(s) {
-  return String(s)
-    .replace(/[^\w]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
+  return String(s).replace(/[^\w]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase();
 }
 
-/**
- * Try canonical paths first:
- *   type "Puppeteer.OpenAI"
- *      dir      = "puppeteer"
- *      leaf(s)  = ["OpenAI"] (could be nested like A.B.C)
- *   candidates:
- *     /nodes/puppeteer/OpenAI.mjs
- *     /nodes/puppeteer/openai.mjs
- *     /nodes/puppeteer/open-ai.mjs
- *     /nodes/puppeteer/A/B/C.mjs (for multi-part)
- *     /nodes/puppeteer/a/b/c.mjs
- *     /nodes/puppeteer/a-b-c.mjs
- */
 async function findByCanonicalPaths(type) {
   const parts = String(type).split(".");
   if (parts.length < 2) return null;
@@ -149,19 +173,23 @@ async function findByCanonicalPaths(type) {
   ];
 
   for (const p of candidates) {
-    if (await fileExists(p)) return p;
+    if (await fileExists(p)) {
+      tlog(`[resolve] ${type} → ${p}`);
+      return p;
+    }
+    tlog(`[resolve miss] ${type} ! ${p}`);
   }
   return null;
 }
 
 async function importModuleAt(absPath) {
-  const url = pathToFileURL(absPath).href + `?t=${Date.now()}`; // bust cache per run
+  const url = pathToFileURL(absPath).href + `?t=${Date.now()}`; // cache-bust
   return import(url);
 }
 
 async function discoverByScanning(type) {
   const files = await listMjsRecursive(NODES_DIR);
-  // quick path: if we saw it recently
+  tlog(`[scan] scanning ${files.length} .mjs under ${NODES_DIR}`);
   for (const f of files) {
     try {
       const mod = await importModuleAt(f);
@@ -169,10 +197,11 @@ async function discoverByScanning(type) {
       if (typeof t === "string") typeToPathCache.set(t, f);
       if (t === type && typeof mod?.run === "function") {
         handlerCache.set(type, mod);
+        tlog(`[scan hit] ${type} at ${f}`);
         return mod;
       }
-    } catch {
-      // ignore broken/foreign modules
+    } catch (e) {
+      tlog(`[scan err] ${f}: ${e?.message || e}`);
     }
   }
   return null;
@@ -180,16 +209,12 @@ async function discoverByScanning(type) {
 
 async function resolveHandler(type) {
   if (handlerCache.has(type)) return handlerCache.get(type);
-
-  // if we already mapped type → path, import directly
   if (typeToPathCache.has(type)) {
     const p = typeToPathCache.get(type);
     const mod = await importModuleAt(p);
     handlerCache.set(type, mod);
     return mod;
   }
-
-  // Try canonical file paths first
   const p = await findByCanonicalPaths(type);
   if (p) {
     const mod = await importModuleAt(p);
@@ -200,24 +225,75 @@ async function resolveHandler(type) {
       return mod;
     }
   }
-
-  // Fall back to scanning /nodes
   const mod = await discoverByScanning(type);
   if (mod) return mod;
 
-  throw new Error(`Handler not found for type "${type}" under ${NODES_DIR}`);
+  const near = [...typeToPathCache.keys()]
+    .filter((k) => k.split(".")[0] === type.split(".")[0])
+    .slice(0, 10);
+  throw new Error(`Handler not found for type "${type}" under ${NODES_DIR}. Near: ${near.join(", ") || "(none)"}`);
 }
 
 /* =============================================================================
-   Workflow executor (pause-aware, serial topo order)
+   Workflow detection + normalization
    ============================================================================= */
-function buildGraph(workflow) {
-  const nodes = new Map();
-  for (const n of workflow.nodes || []) nodes.set(n.id, n);
+function normalizeLinksShape(wf) {
+  const raw = wf.links || wf.edges || wf.connections || wf.wires || [];
+  if (raw.length && raw[0]?.from && raw[0]?.to) { wf.links = raw; return wf; }
+  wf.links = raw.map((l) => {
+    if (l.from && l.to) return l;
+    if (l.source && l.target) {
+      return { from: { nid: l.source.nid, pid: l.source.pid }, to: { nid: l.target.nid, pid: l.target.pid } };
+    }
+    return {
+      from: { nid: l.fromId ?? l.srcId ?? l.sourceId, pid: l.fromPort ?? l.srcPid ?? l.sourcePid },
+      to: { nid: l.toId ?? l.dstId ?? l.targetId, pid: l.toPort ?? l.dstPid ?? l.targetPid },
+    };
+  });
+  return wf;
+}
 
-  const incoming = new Map(); // nid → links[]
-  const outgoing = new Map(); // nid → links[]
-  const indegree = new Map(); // nid → number
+function resolveWorkflow(job, silent = false) {
+  const payload = job?.payload || {};
+  const candidates = [
+    { v: payload.workflow, src: "payload.workflow" },
+    { v: payload.workflow_json, src: "payload.workflow_json" },
+    { v: job.workflow, src: "job.workflow" },
+    { v: job.workflow_json, src: "job.workflow_json" },
+    { v: payload.params, src: "payload.params" },
+    { v: payload.params_json, src: "payload.params_json" },
+    { v: job.params, src: "job.params" },
+    { v: job.params_json, src: "job.params_json" },
+  ];
+
+  for (const { v, src } of candidates) {
+    if (v == null) continue;
+
+    let wf = v;
+    if (typeof wf === "string") {
+      try { wf = JSON.parse(wf); }
+      catch (e) { if (!silent) throw new Error(`Invalid JSON in ${src}: ${e.message}`); else continue; }
+    }
+
+    if (Array.isArray(wf)) wf = { version: 1, nodes: wf, links: [] };
+
+    if (wf && typeof wf === "object" && Array.isArray(wf.nodes)) {
+      return { wf: normalizeLinksShape(wf), source: src };
+    }
+  }
+  return { wf: null, source: null };
+}
+
+/* =============================================================================
+   Graph executor
+   ============================================================================= */
+function buildGraph(wf) {
+  const nodes = new Map();
+  for (const n of wf.nodes || []) nodes.set(n.id, n);
+
+  const incoming = new Map();
+  const outgoing = new Map();
+  const indegree = new Map();
 
   for (const n of nodes.values()) {
     incoming.set(n.id, []);
@@ -225,7 +301,7 @@ function buildGraph(workflow) {
     indegree.set(n.id, 0);
   }
 
-  for (const l of workflow.links || []) {
+  for (const l of wf.links || []) {
     const fromId = l.from?.nid;
     const toId = l.to?.nid;
     if (!nodes.has(fromId) || !nodes.has(toId)) continue;
@@ -239,27 +315,33 @@ function buildGraph(workflow) {
 
 function mergePackets(...objs) {
   const base = {};
-  for (const o of objs) {
-    if (o && typeof o === "object") Object.assign(base, o);
-  }
+  for (const o of objs) if (o && typeof o === "object") Object.assign(base, o);
   return base;
 }
 
 async function execWorkflow(job, runnerId) {
-  const payload = job.payload || {};
-  const wf = payload.workflow;
+  const { wf, source } = resolveWorkflow(job);
   if (!wf || !Array.isArray(wf.nodes)) {
-    throw new Error("payload.workflow is required and must contain nodes[]");
+    const summary = summarizePayload(job.payload || {});
+    await report(job.id, runnerId, "failed", {
+      reason: "workflow_missing_or_invalid",
+      summary,
+    });
+    throw new Error("Missing workflow graph: expected nodes[] in payload.workflow / workflow_json / params / params_json");
   }
+
+  if (DBG) {
+    const peek = (wf.nodes || []).slice(0, 3).map(n => ({ id: n.id, title: n.title, type: n.type }));
+    dlog(`[graph] src=${source} nodes=${wf.nodes?.length || 0} links=${wf.links?.length || 0}`, peek);
+  }
+
+  const payload = job.payload || {};
   const env = Object.assign({}, process.env, payload.env || {});
   const settings = payload.settings || {};
-
-  // Shared bag across handlers (e.g., puppeteer browser/page/context, OpenAI client, etc.)
   const bag = {};
 
-  // Per-node inbound accumulation
-  const inPackets = new Map(); // nid → array of packets from upstream
-  const inByPort = new Map();  // nid → { [portId]: packet }
+  const inPackets = new Map();
+  const inByPort = new Map();
 
   const ctxBase = {
     job,
@@ -277,7 +359,6 @@ async function execWorkflow(job, runnerId) {
 
   const { nodes, incoming, outgoing, indegree } = buildGraph(wf);
 
-  // Queue starts with all indegree==0 nodes
   const q = [];
   for (const [nid, deg] of indegree.entries()) {
     if (deg === 0) q.push(nid);
@@ -285,34 +366,45 @@ async function execWorkflow(job, runnerId) {
     inByPort.set(nid, Object.create(null));
   }
 
-  // Track how many upstreams have emitted into a node
-  const receivedFrom = new Map(); // nid → count
+  const receivedFrom = new Map();
   for (const nid of nodes.keys()) receivedFrom.set(nid, 0);
 
-  // Serial execution (simple & deterministic)
   while (q.length) {
     const nid = q.shift();
     const node = nodes.get(nid);
     const inboundPackets = inPackets.get(nid) || [];
     const inboundByPort = inByPort.get(nid) || {};
 
-    // Pause check before each node
     await ctxBase.checkPause();
 
     await ctxBase.report("progress", {
-      nodeId: nid,
-      nodeType: node.type,
-      title: node.title,
-      status: "start",
+      artifacts: {
+        event: "node_start",
+        nodeId: nid,
+        nodeType: node.type,
+        title: node.title,
+      },
     });
 
-    // Resolve handler
-    const mod = await resolveHandler(node.type);
-    if (typeof mod?.run !== "function") {
-      throw new Error(`Handler for ${node.type} does not export a 'run' function`);
+    let mod = null;
+    try {
+      mod = await resolveHandler(node.type);
+    } catch (e) {
+      await ctxBase.report("failed", {
+        event: "handler_missing",
+        nodeId: nid,
+        nodeType: node.type,
+        error: { message: String(e?.message || e) },
+      });
+      throw e;
     }
 
-    // Node context
+    if (typeof mod?.run !== "function") {
+      const msg = `Handler for ${node.type} does not export a 'run' function`;
+      await ctxBase.report("failed", { event: "handler_invalid", nodeId: nid, nodeType: node.type, error: { message: msg } });
+      throw new Error(msg);
+    }
+
     const mergedPacket = mergePackets(...inboundPackets);
     const nodeCtx = {
       ...ctxBase,
@@ -323,12 +415,14 @@ async function execWorkflow(job, runnerId) {
       inByPort: inboundByPort,
     };
 
-    // Execute node
     let result = null;
     try {
+      if (TRACE) tlog(`[node] ${node.type} (${node.title || nid}) in:`, redactDeep({ packet: mergedPacket, fields: node.fields || {} }));
       result = await mod.run(nodeCtx);
+      if (TRACE) tlog(`[node] ${node.type} out:`, redactDeep(result));
     } catch (err) {
       await ctxBase.report("failed", {
+        event: "node_error",
         nodeId: nid,
         nodeType: node.type,
         error: { message: String(err?.message || err) },
@@ -336,11 +430,9 @@ async function execWorkflow(job, runnerId) {
       throw err;
     }
 
-    // Normalize result
     const packetDelta = result?.packet ?? result?.packetDelta ?? {};
     const mergedOut = mergePackets(mergedPacket, packetDelta);
 
-    // Emit to downstream
     const outs = outgoing.get(nid) || [];
     const outputsMap = (result && typeof result === "object" && result.outputs) || null;
 
@@ -351,54 +443,48 @@ async function execWorkflow(job, runnerId) {
 
       let outPacket = mergedOut;
       if (outputsMap) {
-        // allow matching by output port id or name
-        outPacket =
-          outputsMap[fromPid] ??
-          outputsMap[node.outputs?.find((o) => o.id === fromPid)?.name] ??
-          mergedOut;
+        const byId = outputsMap[fromPid];
+        let byName = null;
+        try {
+          const name = node.outputs?.find((o) => o.id === fromPid)?.name;
+          byName = name ? outputsMap[name] : null;
+        } catch { }
+        outPacket = byId ?? byName ?? mergedOut;
       }
 
-      // Accumulate into downstream node
       if (!inPackets.has(toId)) inPackets.set(toId, []);
       if (!inByPort.has(toId)) inByPort.set(toId, Object.create(null));
       inPackets.get(toId).push(outPacket);
       inByPort.get(toId)[toPid] = outPacket;
 
-      // Book-keeping for readiness
       receivedFrom.set(toId, (receivedFrom.get(toId) || 0) + 1);
       const need = incoming.get(toId)?.length || 0;
       if (receivedFrom.get(toId) === need) q.push(toId);
     }
 
     await ctxBase.report("progress", {
-      nodeId: nid,
-      nodeType: node.type,
-      title: node.title,
-      status: "done",
+      artifacts: {
+        event: "node_done",
+        nodeId: nid,
+        nodeType: node.type,
+        title: node.title,
+      },
     });
   }
 
-  // Optional cleanup if handlers left resources in bag
   await gracefulCleanup(bag);
 }
 
 async function gracefulCleanup(bag) {
   try {
-    // common Puppeteer handles
-    if (bag.page && typeof bag.page.close === "function") {
-      await bag.page.close().catch(() => {});
-    }
-    if (bag.context && typeof bag.context.close === "function") {
-      await bag.context.close().catch(() => {});
-    }
-    if (bag.browser && typeof bag.browser.close === "function") {
-      await bag.browser.close().catch(() => {});
-    }
-  } catch {}
+    if (bag.page && typeof bag.page.close === "function") await bag.page.close().catch(() => { });
+    if (bag.context && typeof bag.context.close === "function") await bag.context.close().catch(() => { });
+    if (bag.browser && typeof bag.browser.close === "function") await bag.browser.close().catch(() => { });
+  } catch { }
 }
 
 /* =============================================================================
-   Legacy: module/code payloads
+   Module/code executor (legacy)
    ============================================================================= */
 async function execModuleOrCode(job, runnerId) {
   const payload = job.payload || {};
@@ -421,25 +507,18 @@ async function execModuleOrCode(job, runnerId) {
     const fn = exportName === "default" ? ns.default : ns[exportName];
     if (typeof fn !== "function") {
       const keys = Object.keys(ns);
-      throw new Error(
-        `Export "${exportName}" not found or not a function. Exports: ${keys.join(", ") || "(none)"}`
-      );
+      throw new Error(`Export "${exportName}" not found or not a function. Exports: ${keys.join(", ") || "(none)"}`);
     }
     const oldEnv = process.env;
-    try {
-      process.env = env;
-      return await fn(ctx, ...args);
-    } finally {
-      process.env = oldEnv;
-    }
+    try { process.env = env; return await fn(ctx, ...args); }
+    finally { process.env = oldEnv; }
   };
 
   if (mode === "module") {
     if (!payload.file) throw new Error(`payload.file is required for mode "module"`);
-    const abs =
-      payload.file.startsWith("file://")
-        ? payload.file
-        : pathToFileURL(path.isAbsolute(payload.file) ? payload.file : path.resolve(payload.file)).href;
+    const abs = payload.file.startsWith("file://")
+      ? payload.file
+      : pathToFileURL(path.isAbsolute(payload.file) ? payload.file : path.resolve(payload.file)).href;
     const mod = await import(abs + `?t=${Date.now()}`);
     return await runExport(mod);
   }
@@ -454,7 +533,7 @@ async function execModuleOrCode(job, runnerId) {
 }
 
 /* =============================================================================
-   Job runner & main loop
+   Main loop
    ============================================================================= */
 async function runJob(job, runnerId) {
   const id = job.id;
@@ -462,30 +541,41 @@ async function runJob(job, runnerId) {
 
   const hbLoop = setInterval(() => {
     heartbeat(id, runnerId, 90)
-      .then((hb) => {
-        if (hb?.control === "pause") {
-          console.log(`Job #${id} → server requested PAUSE`);
-        }
-      })
+      .then((hb) => { if (hb?.control === "pause") dlog(`Job #${id} → server requested PAUSE`); })
       .catch((e) => console.error("heartbeat err", e.message));
   }, 15_000);
 
   const startedAt = Date.now();
   try {
-    // initial pause gate
     const first = await heartbeat(id, runnerId, 90);
     if (first?.control === "pause") {
-      console.log(`Job #${id} initial pause; idling…`);
+      dlog(`Job #${id} initial pause; idling…`);
       await waitWhilePaused(id, runnerId);
-      console.log(`Job #${id} resumed.`);
+      dlog(`Job #${id} resumed.`);
     }
 
-    const mode = job.payload?.mode || "workflow";
-    if (mode === "workflow") {
-      await execWorkflow(job, runnerId);
-    } else {
-      await execModuleOrCode(job, runnerId);
+    if (DBG) {
+      dlog(`[job] leased id=${job.id}`, {
+        has_job_workflow: !!job.workflow,
+        has_job_workflow_json: !!job.workflow_json,
+        has_job_params: !!job.params,
+        has_job_params_json: !!job.params_json,
+        payload_keys: Object.keys(job.payload || {}),
+      });
+      dlog(`[payload]`, redactDeep(summarizePayload(job.payload || {})));
     }
+
+    const detected = resolveWorkflow(job, true);
+    const mode =
+      job.payload?.mode ||
+      (detected.wf ? "workflow" : (job.payload?.code ? "code" : "module"));
+
+    if (DBG && detected.wf) {
+      dlog(`[workflow] using ${detected.source} (nodes=${detected.wf.nodes?.length || 0}, links=${detected.wf.links?.length || 0})`);
+    }
+
+    if (mode === "workflow") await execWorkflow({ ...job, payload: job.payload || {} }, runnerId);
+    else await execModuleOrCode(job, runnerId);
 
     await report(id, runnerId, "succeeded", { run_ms: Date.now() - startedAt });
   } catch (err) {
@@ -499,22 +589,24 @@ async function runJob(job, runnerId) {
 async function main() {
   const runnerId = process.env.YOLANDI_RUNNER_ID || `runner-${Math.random().toString(36).slice(2)}`;
   if (!BASE) {
-    console.error("YOLANDI_API env var is required (e.g., https://yolandi.org/wp-json/yolandi/v1)");
+    console.error("YOLANDI_API env var is required (e.g., https://yoursite.com/wp-json/yolandi/v1)");
     process.exit(1);
   }
   console.log(`[YOLANDI Runner] nodes dir = ${NODES_DIR}`);
-  for (;;) {
+  let idle = 0;
+
+  for (; ;) {
     const job = await lease(runnerId).catch((e) => (console.error("lease err", e), null));
     if (!job) {
+      idle++;
+      if (DBG && idle % 15 === 0) dlog(`[idle] no jobs yet (${idle} ticks)`);
       await sleep(2000);
       continue;
     }
+    idle = 0;
     console.log(job)
     await runJob(job, runnerId);
   }
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main().catch((e) => { console.error(e); process.exit(1); });

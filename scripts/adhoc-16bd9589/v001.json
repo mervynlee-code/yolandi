@@ -1,0 +1,78 @@
+{
+    "version": 1,
+    "view": {
+        "x": 0,
+        "y": 0,
+        "k": 1
+    },
+    "nodes": [
+        {
+            "id": "no3bp3mo",
+            "title": "Puppeteer: Form Fill",
+            "type": "Puppeteer.FormFill",
+            "x": 573,
+            "y": 302,
+            "w": 280,
+            "fields": {
+                "formJson": "",
+                "screenshotOnDone": false
+            },
+            "inputs": [
+                {
+                    "id": "i0",
+                    "name": "in"
+                }
+            ],
+            "outputs": [
+                {
+                    "id": "o0",
+                    "name": "out"
+                }
+            ]
+        },
+        {
+            "id": "nkvldu6e",
+            "title": "Puppeteer: Browser",
+            "type": "Puppeteer.Browser",
+            "x": 161,
+            "y": 153,
+            "w": 280,
+            "fields": {
+                "headless": true,
+                "engine": "chrome",
+                "executablePath": "",
+                "userDataDir": "",
+                "cliArgs": "",
+                "defaultViewport": "1280x800",
+                "incognito": false,
+                "userAgent": "",
+                "timeoutMs": 60000
+            },
+            "inputs": [
+                {
+                    "id": "i0",
+                    "name": "in"
+                }
+            ],
+            "outputs": [
+                {
+                    "id": "o0",
+                    "name": "out"
+                }
+            ]
+        }
+    ],
+    "links": [
+        {
+            "id": "l4r13toq",
+            "from": {
+                "nid": "nkvldu6e",
+                "pid": "o0"
+            },
+            "to": {
+                "nid": "no3bp3mo",
+                "pid": "i0"
+            }
+        }
+    ]
+}

@@ -1,0 +1,42 @@
+{
+    "version": 1,
+    "view": {
+        "x": 0,
+        "y": 0,
+        "k": 1
+    },
+    "nodes": [
+        {
+            "id": "n0zgxazp",
+            "title": "Puppeteer: Browser",
+            "type": "Puppeteer.Browser",
+            "x": 200,
+            "y": 247,
+            "w": 280,
+            "fields": {
+                "headless": false,
+                "engine": "chrome",
+                "executablePath": "",
+                "userDataDir": "",
+                "cliArgs": "",
+                "defaultViewport": "1280x800",
+                "incognito": false,
+                "userAgent": "",
+                "timeoutMs": 60000
+            },
+            "inputs": [
+                {
+                    "id": "i0",
+                    "name": "in"
+                }
+            ],
+            "outputs": [
+                {
+                    "id": "o0",
+                    "name": "out"
+                }
+            ]
+        }
+    ],
+    "links": []
+}
